@@ -19,17 +19,18 @@ namespace idl {
 TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
                      OutputChannel& out, Valuation valuation,
                      const LogicInfo& logicInfo)
-  : Theory(THEORY_ARITH, c, u, out, valuation, logicInfo),
-  d_distances(c),
-  d_propagationEdges(c),
-  d_pathEdges(c),
-  d_varList(c),
-  d_propagatedLevels(c),
-  d_explanations(c),
-  d_distSetLevels(c),
-  d_assertions(c),
-  d_propagationIndices(c)
-{}
+    : Theory(THEORY_ARITH, c, u, out, valuation, logicInfo),
+      d_distances(c),
+      d_propagationEdges(c),
+      d_pathEdges(c),
+      d_varList(c),
+      d_propagatedLevels(c),
+      d_explanations(c),
+      d_distSetLevels(c),
+      d_assertions(c),
+      d_propagationIndices(c) {
+  std::cout << __PRETTY_FUNCTION__ << std::endl;
+}
 
 void TheoryIdl::preRegisterTerm(TNode node) {
   Assert(node.getKind() != kind::NOT);
@@ -62,6 +63,7 @@ void TheoryIdl::postsolve() {
 }
 
 Node TheoryIdl::ppRewrite(TNode atom) {
+  std::cout << __PRETTY_FUNCTION__ << std::endl;
   Assert(atom.getKind() != kind::NOT);
   if (atom.getKind() == kind::EQUAL) {
     Node leq = NodeBuilder<2>(kind::LEQ) << atom[0] << atom[1];
@@ -91,6 +93,7 @@ void TheoryIdl::propagate(Effort level) {
 }
 
 Node TheoryIdl::explain(TNode n) {
+  std::cout << __PRETTY_FUNCTION__ << std::endl;
   Assert(d_propagationIndices.contains(n));
   std::pair<unsigned, unsigned> indices = d_propagationIndices[n];
 
@@ -175,6 +178,7 @@ Node TheoryIdl::explain(TNode n) {
 }
 
 void TheoryIdl::check(Effort level) {
+  std::cout << __PRETTY_FUNCTION__ << std::endl;
   if (done() && !fullEffort(level)) {
     return;
   }
@@ -212,6 +216,7 @@ void TheoryIdl::check(Effort level) {
 }
 
 bool TheoryIdl::processAssertion(const IDLAssertion& assertion) {
+  std::cout << __PRETTY_FUNCTION__ << std::endl;
   Assert(assertion.ok());
 
   TNode x = assertion.getX();
