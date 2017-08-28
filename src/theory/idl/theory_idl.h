@@ -29,54 +29,63 @@ namespace CVC4 {
 namespace theory {
 namespace idl {
 
+class TrailEntry {
+public:
+  TNode original;
+  TNode x, y;
+  Integer c;
+  /**
+   * 0 reasons: asserted
+   * 1 reason: propagated from something else
+   * 2, 3 reasons: shortest edge discovered
+   */
+  unsigned numReasons;
+  unsigned reason1, reason2, reason3;
+};
+
 /**
  * Handles integer difference logic (IDL) constraints.
  */
 class TheoryIdl : public Theory {
-
   /** Process a new assertion */
-  bool processAssertion(const IDLAssertion& assertion);
+  bool processAssertion(const IDLAssertion& assertion, const TNode& original);
 
   typedef std::pair<TNode, TNode> TNodePair;
 
-  typedef context::CDHashMap<TNode, int, TNodeHashFunction> TNodeToIntCDMap;
-  typedef context::CDInsertHashMap<TNodePair, int, TNodePairHashFunction> TNodePairToIntInsertCDMap;
-  typedef context::CDHashMap<TNodePair, Integer, TNodePairHashFunction> TNodePairToIntegerCDMap;
-  typedef context::CDHashMap<TNodePair, TNode, TNodePairHashFunction> TNodePairToTNodeCDMap;
-  typedef context::CDHashMap<TNodePair, std::vector<TNode>, TNodePairHashFunction> TNodePairToTNodeVectorCDMap;
-  typedef context::CDHashMap<TNode, std::vector<TNode>, TNodeHashFunction> TNodeToTNodeVectorCDMap;
-  typedef context::CDHashMap<TNode, std::pair<unsigned, unsigned>, TNodeHashFunction> TNodeToUnsignedPairCDMap;
+  typedef context::CDHashMap<TNodePair, Integer, TNodePairHashFunction>
+      TNodePairToIntegerCDMap;
+  typedef context::CDHashMap<TNodePair, std::vector<TNode>,
+                             TNodePairHashFunction>
+      TNodePairToTNodeVectorCDMap;
+  typedef context::CDHashMap<TNode, unsigned, TNodeHashFunction>
+      TNodeToUnsignedCDMap;
+  typedef context::CDHashMap<TNodePair, unsigned, TNodePairHashFunction>
+      TNodePairToUnsignedCDMap;
   typedef context::CDHashSet<TNodePair, TNodePairHashFunction> TNodePairCDSet;
-  typedef context::CDInsertHashMap<int, unsigned> IntToUnsignedInsertHashMap;
+  typedef context::CDList<TrailEntry> TrailType;
+  typedef context::CDList<TNode> TNodeCDList;
 
-  typedef __gnu_cxx::hash_map<TNodePair, Integer, TNodePairHashFunction> HashGraphType;
-  typedef __gnu_cxx::hash_map<TNodePair, TNode, TNodePairHashFunction> HashGraphEdgesType;
-  typedef __gnu_cxx::hash_map<TNodePair, int, TNodePairHashFunction> HashGraphEdgeIdxType;
+  /** Trail of literals, either asserted or inferred **/
+  TrailType d_trail;
 
-  TNodePairToTNodeCDMap d_pathEdges;
+  /** Shortest path matrix **/
   TNodePairToIntegerCDMap d_distances;
-  TNodePairToIntInsertCDMap d_distSetLevels;
 
-  TNodePairToTNodeVectorCDMap d_propagationEdges;
-  TNodePairToTNodeVectorCDMap d_propagationNegEdges;
-  TNodeToIntCDMap d_propagatedLevels;
-  TNodeToTNodeVectorCDMap d_explanations;
-
+  /** Whether there is any edge **/
   TNodePairCDSet d_valid;
 
-  IntToUnsignedInsertHashMap d_enteredLevelIdx;
+  /** Edges associated to a given pair for propagation **/
+  TNodePairToTNodeVectorCDMap d_propagationEdges;
 
-  context::CDVector<TNode> d_varList;
+  /** The index in the trail at which a distance was obtained **/
+  TNodePairToUnsignedCDMap d_indices;
 
-  context::CDList<TNode> d_assertions;
-  TNodeToUnsignedPairCDMap d_propagationIndices;
+  /** The index in the trail at which a literal was asserted or propagated **/
+  TNodeToUnsignedCDMap d_indices1;
 
-  bool getPath(TNodePairToTNodeCDMap& pathedges, std::vector<TNode>& edges, TNode s, TNode t);
-
-  bool getPath(HashGraphEdgesType& nextArray, std::vector<TNode>& edges, TNode s, TNode t);
+  TNodeCDList d_varList;
 
 public:
-
   /** Theory constructor. */
   TheoryIdl(context::Context* c, context::UserContext* u, OutputChannel& out,
             Valuation valuation, const LogicInfo& logicInfo);
@@ -89,7 +98,7 @@ public:
 
   /** Clean up the solving data structures */
   void postsolve();
-  
+
   /** Pre-processing of input atoms */
   Node ppRewrite(TNode atom);
 
@@ -98,13 +107,15 @@ public:
 
   void propagate(Effort level);
 
+  void getPath(unsigned idx, std::vector<TNode>& reasonslist);
+
   Node explain(TNode n);
 
   /** Identity string */
   std::string identify() const { return "THEORY_IDL"; }
 
-};/* class TheoryIdl */
+}; /* class TheoryIdl */
 
-}/* CVC4::theory::idl namespace */
-}/* CVC4::theory namespace */
-}/* CVC4 namespace */
+} /* CVC4::theory::idl namespace */
+} /* CVC4::theory namespace */
+} /* CVC4 namespace */
