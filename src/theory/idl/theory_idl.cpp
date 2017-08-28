@@ -40,7 +40,7 @@ TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
       d_indices(c),
       d_indices1(c),
       d_varList(c) {
-  // cout << "theory IDL constructed" << endl;
+   cout << "theory IDL constructed" << endl;
 }
 
 void TheoryIdl::preRegisterTerm(TNode node) {
