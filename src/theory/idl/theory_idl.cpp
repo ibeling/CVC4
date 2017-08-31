@@ -39,7 +39,8 @@ namespace CVC4 {
 	  d_propagationEdges(c),
 	  d_indices(c),
 	  d_indices1(c),
-	  d_varList(c) {
+	  d_varList(c),
+	  d_allNodes(c) {
 	// 	cout << "theory IDL constructed" << endl;
       }
 
@@ -53,32 +54,7 @@ namespace CVC4 {
 	} else {
 	  IDLAssertion idl_assertion(node);
 	  if (idl_assertion.ok()) {
-	    //	    cout << "node is " << node << endl;
-	    // cout << "idl assertion is " << idl_assertion << endl;
-	    
-	    TNodePair xy = std::make_pair(idl_assertion.getX(), idl_assertion.getY());
-	    std::vector<TNode> prop_edge;
-	    if (d_propagationEdges.contains(xy)) {
-	      prop_edge = d_propagationEdges[xy].get();
-	    }
-	    prop_edge.push_back(node);
-	    d_propagationEdges[xy] = prop_edge;
-
-	    Node neg = NodeManager::currentNM()->mkNode(kind::NOT, node);
-	    IDLAssertion neg_idl_assertion(neg);
-	          TNodePair xyneg =
-		    std::make_pair(neg_idl_assertion.getX(), neg_idl_assertion.getY());
-		  std::vector<TNode> neg_prop_edge;
-		  if (d_propagationEdges.contains(xyneg)) {
-		    neg_prop_edge = d_propagationEdges[xyneg].get();
-		  }
-		  neg_prop_edge.push_back(neg);
-		  d_propagationEdges[xyneg] = neg_prop_edge;
-
-		  // cout << "registered " << node << " with corresponding neg " << neg <<
-		  // endl;
-	  } else {
-	    //	    cout << "not ok node is " << node << endl;
+	    d_allNodesSet.insert(node);
 	  }
 	}
       }
@@ -104,7 +80,37 @@ namespace CVC4 {
       }
 
       void TheoryIdl::propagate(Effort level) {
-	// Propagation is done when new shortest paths are discovered.
+	std::list<TNode> toDelete;
+	std::set<TNode> nodes = d_allNodes.back();
+	bool value;
+        for ( const auto &node : nodes )
+	  {
+	    bool alreadyAssigned = d_valuation.hasSatValue(node, value);
+	    if (alreadyAssigned)
+	      {
+		toDelete.push_back(node);
+		continue;
+	      }
+	    IDLAssertion idl_assertion(node);
+	    TNode x = idl_assertion.getX();
+	    TNode y = idl_assertion.getY();
+	    Integer c = idl_assertion.getC();
+	    TNodePair xy = std::make_pair(x, y);
+	    if (d_valid.contains(xy) && (d_distances[xy].get() <= c)) {
+	      d_indices1[node] = d_indices[xy];
+	      d_out->propagate( node );
+	      toDelete.push_back(node); // ????
+	    }
+	    
+	  }
+
+	for (const auto & node : toDelete)
+	  {
+	    nodes.erase(node);
+	  }
+
+	d_allNodes.push_back(nodes);
+	
       }
 
       void TheoryIdl::getPath(unsigned idx, std::vector<TNode>& reasonslist) {
@@ -138,6 +144,12 @@ namespace CVC4 {
       }
 
       void TheoryIdl::check(Effort level) {
+	if (!donePreprocess)
+	  {
+	    d_allNodes.push_back(d_allNodesSet);
+	    donePreprocess = true;
+	  }
+	
 	if (done() && !fullEffort(level)) {
 	  return;
 	}
@@ -276,22 +288,7 @@ namespace CVC4 {
 		// 3 infer: propagate path, x - z <= 10
 		// reason indices the same.
 
-		// Propagate anything implied by the new shortest path
-		if (d_propagationEdges.contains(zv)) {
-		  const std::vector<TNode>& prop_assertions =
-		    d_propagationEdges[zv].get();
-		  for (unsigned k = 0; k < prop_assertions.size(); ++k) {
-		                  IDLAssertion propagation_assertion =
-				    IDLAssertion(prop_assertions[k]);
-				  bool value;
-				  if ((dist <= propagation_assertion.getC()) &&
-				      !d_valuation.hasSatValue(propagation_assertion.getTNode(),
-							       value)) {
-				    d_out->propagate(propagation_assertion.getTNode());
-				    d_indices1[prop_assertions[k]] = d_indices[zv];
-				  }
-		  }
-		}
+
 	      }
 	    }
 	  }

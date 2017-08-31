@@ -59,6 +59,8 @@ namespace CVC4 {
 	typedef context::CDList<TrailEntry> TrailType;
 	typedef context::CDList<TNode> TNodeCDList;
 
+	bool donePreprocess = false;
+
 	/** Trail of literals, either asserted or inferred **/
 	TrailType d_trail;
 
@@ -78,6 +80,9 @@ namespace CVC4 {
 	TNodeToUnsignedCDMap d_indices1;
 
 	TNodeCDList d_varList;
+
+	context::CDList<std::set<TNode> > d_allNodes;
+	std::set<TNode> d_allNodesSet;
 
       public:
 	/** Theory constructor. */
