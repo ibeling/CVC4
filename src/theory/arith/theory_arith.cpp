@@ -36,6 +36,8 @@ TheoryArith::TheoryArith(context::Context* c, context::UserContext* u,
     , d_internal(new TheoryArithPrivate(*this, c, u, out, valuation, logicInfo))
     , d_ppRewriteTimer("theory::arith::ppRewriteTimer")
 {
+  cout << "theory arith constrcuted" << endl;
+  
   smtStatisticsRegistry()->registerStat(&d_ppRewriteTimer);
   if (options::nlExt()) {
     setupExtTheory();

@@ -40,8 +40,11 @@ namespace CVC4 {
 	  d_indices(c),
 	  d_indices1(c),
 	  d_varList(c),
-	  d_allNodes(c) {
-	// 	cout << "theory IDL constructed" << endl;
+	  d_allNodes(c),
+	  d_atomList(c),
+	  d_firstAtom(c)
+      {
+	 	cout << "theory IDL constructed" << endl;
       }
 
       void TheoryIdl::preRegisterTerm(TNode node) {
@@ -54,7 +57,24 @@ namespace CVC4 {
 	} else {
 	  IDLAssertion idl_assertion(node);
 	  if (idl_assertion.ok()) {
-	    d_allNodesSet.insert(node);
+	    	Assert(node.getKind() != kind::NOT);
+		AtomListEntry atomentry;
+		if (d_atomList.size() == 0)
+		  {
+		    d_firstAtom.set(0);
+		    atomentry.prevSteps = 0;
+		  }
+		else {
+		  atomentry.prevSteps = 1;
+		  		AtomListEntry lastEntry = d_atomList[d_atomList.size() - 1];
+		lastEntry.nextSteps = 1;
+		d_atomList.set(lastEntry.pos, lastEntry);
+		}
+		atomentry.nextSteps = 0;
+		atomentry.atom = node;
+		atomentry.pos = d_atomList.size();
+		d_atomList.push_back(atomentry);
+		d_atomToIndexMap[node] = d_atomList.size() - 1;
 	  }
 	}
       }
@@ -80,17 +100,24 @@ namespace CVC4 {
       }
 
       void TheoryIdl::propagate(Effort level) {
-	std::list<TNode> toDelete;
-	std::set<TNode> nodes = d_allNodes.back();
+	//	  cout << "Printing assertion list " << endl;
+	//cout << "The first index is  " << d_firstAtom.get() << endl;
+	  for (unsigned i = 0; i < d_atomList.size(); ++i )
+	    {
+	      AtomListEntry entry = d_atomList.get(i);
+	      //    cout << entry.nextSteps << " " << entry.prevSteps << " " << entry.pos << " " << entry.atom << endl;
+	    }
+	  //	  cout << "Propagating!" << endl;
+
 	bool value;
-        for ( const auto &node : nodes )
-	  {
+	AtomListEntry entry = d_atomList.get(d_firstAtom.get());
+	while (entry.nextSteps != 0) {
+	  TNode node = entry.atom;
+	  //	  cout << "considering " << node << endl;
+	  // 	  cout << "next " << entry.nextSteps << " prev " << entry.prevSteps << " pos " << entry.pos << endl; 
+
 	    bool alreadyAssigned = d_valuation.hasSatValue(node, value);
-	    if (alreadyAssigned)
-	      {
-		toDelete.push_back(node);
-		continue;
-	      }
+	    Assert(!alreadyAssigned);
 	    IDLAssertion idl_assertion(node);
 	    TNode x = idl_assertion.getX();
 	    TNode y = idl_assertion.getY();
@@ -98,19 +125,30 @@ namespace CVC4 {
 	    TNodePair xy = std::make_pair(x, y);
 	    if (d_valid.contains(xy) && (d_distances[xy].get() <= c)) {
 	      d_indices1[node] = d_indices[xy];
+	      // 	      cout << "propagating " << node << endl;
 	      d_out->propagate( node );
-	      toDelete.push_back(node); // ????
+	    }
+
+	    TNodePair yx = std::make_pair(y, x);
+	    if (d_valid.contains(yx) && (d_distances[yx].get() <= -c - 1)) {
+	      Node notNode = NodeManager::currentNM()->mkNode(kind::NOT, node);
+	      d_indices1[notNode] = d_indices[yx];
+	      // 	      	      cout << "propagating " << notNode << endl;
+	      d_out->propagate(notNode);
+	    }
+
+	    unsigned nextIndex = entry.pos + entry.nextSteps;
+	    // 	    cout << "next Index  " << nextIndex << endl;
+
+	    for (unsigned i = 0; i < d_atomList.size(); ++i )
+	    {
+	      AtomListEntry entry = d_atomList.get(i);
+	      // 	      cout << entry.nextSteps << " " << entry.prevSteps << " " << entry.pos << " " << entry.atom << endl;
 	    }
 	    
-	  }
-
-	for (const auto & node : toDelete)
-	  {
-	    nodes.erase(node);
-	  }
-
-	d_allNodes.push_back(nodes);
-	
+	    
+	    entry = d_atomList.get(nextIndex);
+	}
       }
 
       void TheoryIdl::getPath(unsigned idx, std::vector<TNode>& reasonslist) {
@@ -144,11 +182,6 @@ namespace CVC4 {
       }
 
       void TheoryIdl::check(Effort level) {
-	if (!donePreprocess)
-	  {
-	    d_allNodes.push_back(d_allNodesSet);
-	    donePreprocess = true;
-	  }
 	
 	if (done() && !fullEffort(level)) {
 	  return;
@@ -156,9 +189,62 @@ namespace CVC4 {
 
 	TimerStat::CodeTimer checkTimer(d_checkTime);
 
+	
+
 	while (!done()) {
 	  // Get the next assertion
 	  Assertion assertion = get();
+	  TNode assertiontnode = assertion.assertion;
+	  //	  cout << "Asserted " << assertiontnode << endl;
+	  if (assertiontnode.getKind() == kind::NOT)
+	    {
+	      //	      cout << "assert " << assertiontnode << endl;
+
+	      assertiontnode = assertion.assertion[0];
+	    }
+
+	  //assertiontnode is now an atom
+
+	  //	  cout << "asserting atom " << assertiontnode << endl;
+	  unsigned index = d_atomToIndexMap[assertiontnode];
+	  //	  cout << "deleting entry at index " << index << endl;
+	  AtomListEntry entry = d_atomList.get(index);
+
+	  //	  cout << entry.nextSteps << " " << entry.prevSteps << " " << entry.pos << " " << entry.atom << endl;
+	  
+
+      
+	  // delete from list
+	 
+	  if (entry.prevSteps != 0)
+	    {
+	      AtomListEntry prevEntry = d_atomList.get(entry.pos - entry.prevSteps);
+	      prevEntry.nextSteps = prevEntry.nextSteps + entry.nextSteps;
+	      d_atomList.set(prevEntry.pos, prevEntry);
+	    }
+	  if (entry.nextSteps != 0)
+	    {
+	      AtomListEntry nextEntry = d_atomList.get(entry.pos + entry.nextSteps);
+	      nextEntry.prevSteps = nextEntry.prevSteps + entry.prevSteps;
+	      d_atomList.set(nextEntry.pos, nextEntry);
+	    }
+
+	  // delete first atom:
+	  // firstIndex has to be updated. (if also last atom, set to end)
+	  // besides this, next entry has to have prev set to zero.
+	  unsigned firstIndex = d_firstAtom.get();
+	  if (index == firstIndex)
+	    {
+	      if (entry.nextSteps != 0) {
+		AtomListEntry afterFirst = d_atomList.get(entry.nextSteps + index);
+		afterFirst.prevSteps = 0;
+		d_atomList.set(entry.nextSteps + index, afterFirst);
+	      }
+	      d_firstAtom.set(entry.nextSteps + index);
+	    }
+
+
+	  //	  cout << "Asserting! " << endl;
 	  Debug("theory::idl") << "TheoryIdl::check(): processing "
 			       << assertion.assertion << std::endl;
 	  IDLAssertion idl_assertion(assertion);
@@ -198,6 +284,7 @@ namespace CVC4 {
 
 	// Check whether assertion is redundant
 	if (d_valid.contains(xy) && (d_distances[xy].get() <= c)) {
+	  //	  cout << "redundant!" << endl;
 	  return true;
 	}
 
