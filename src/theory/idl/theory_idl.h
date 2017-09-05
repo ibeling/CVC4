@@ -29,6 +29,14 @@ namespace CVC4 {
   namespace theory {
     namespace idl {
 
+      class AtomListEntry {
+      public:
+	unsigned nextSteps;
+	unsigned prevSteps;
+	unsigned pos;
+	TNode atom;
+      };
+      
       class TrailEntry {
       public:
 	TNode original;
@@ -83,6 +91,10 @@ namespace CVC4 {
 
 	context::CDList<std::set<TNode> > d_allNodes;
 	std::set<TNode> d_allNodesSet;
+
+	context::CDVector<AtomListEntry> d_atomList;
+	context::CDO<unsigned> d_firstAtom;
+	std::unordered_map<TNode, unsigned, TNodeHashFunction> d_atomToIndexMap;
 
       public:
 	/** Theory constructor. */
