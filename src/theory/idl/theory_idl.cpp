@@ -102,12 +102,6 @@ namespace CVC4 {
       void TheoryIdl::propagate(Effort level) {
 	//	  cout << "Printing assertion list " << endl;
 	//cout << "The first index is  " << d_firstAtom.get() << endl;
-	  for (unsigned i = 0; i < d_atomList.size(); ++i )
-	    {
-	      AtomListEntry entry = d_atomList.get(i);
-	      //    cout << entry.nextSteps << " " << entry.prevSteps << " " << entry.pos << " " << entry.atom << endl;
-	    }
-	  //	  cout << "Propagating!" << endl;
 
 	bool value;
 	AtomListEntry entry = d_atomList.get(d_firstAtom.get());
@@ -130,22 +124,23 @@ namespace CVC4 {
 	    }
 
 	    TNodePair yx = std::make_pair(y, x);
-	    if (d_valid.contains(yx) && (d_distances[yx].get() <= -c - 1)) {
-	      Node notNode = NodeManager::currentNM()->mkNode(kind::NOT, node);
-	      d_indices1[notNode] = d_indices[yx];
+	    if (d_valid.contains(yx) && (d_distances[yx].get() < -c)) {
+				TNode nn;
+				if ( d_atomToNegAtomMap.find(node) == d_atomToNegAtomMap.end() )
+				{
+					Node notNode = NodeManager::currentNM()->mkNode(kind::NOT, node);
+					d_atomToNegAtomMap[atom] = notNode;
+					nn = notNode;
+				} else {
+					nn = d_atomToNegAtomMap[atom];
+				}
+	      d_indices1[nn] = d_indices[yx];
 	      // 	      	      cout << "propagating " << notNode << endl;
-	      d_out->propagate(notNode);
+	      d_out->propagate(nn);
 	    }
 
 	    unsigned nextIndex = entry.pos + entry.nextSteps;
 	    // 	    cout << "next Index  " << nextIndex << endl;
-
-	    for (unsigned i = 0; i < d_atomList.size(); ++i )
-	    {
-	      AtomListEntry entry = d_atomList.get(i);
-	      // 	      cout << entry.nextSteps << " " << entry.prevSteps << " " << entry.pos << " " << entry.atom << endl;
-	    }
-	    
 	    
 	    entry = d_atomList.get(nextIndex);
 	}
@@ -200,7 +195,8 @@ namespace CVC4 {
 	    {
 	      //	      cout << "assert " << assertiontnode << endl;
 
-	      assertiontnode = assertion.assertion[0];
+				assertiontnode = assertion.assertion[0];
+				d_atomToNegAtomMap[assertiontnode] = assertion.assertion;
 	    }
 
 	  //assertiontnode is now an atom
