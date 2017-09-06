@@ -35,13 +35,14 @@ class AtomListEntry {
   unsigned prevSteps;
   unsigned pos;
   TNode atom;
+  unsigned x;
+  unsigned y;
+  Integer c;
 };
 
 class TrailEntry {
- public:
+public:
   TNode original;
-  TNode x, y;
-  Integer c;
   std::vector<unsigned> reasons;
 };
 
@@ -73,13 +74,15 @@ class TheoryIdl : public Theory {
   TrailType d_trail;
 
   /** Shortest path matrix **/
-  TNodePairToIntegerCDMap d_distances;
+  context::CDVector<Integer> d_distances;
+  context::CDVector<bool> d_valid;
+  context::CDHashMap<TNode, unsigned, TNodeHashFunction> d_varMap;
 
   /** Edges associated to a given pair for propagation **/
   TNodePairToTNodeVectorCDMap d_propagationEdges;
 
   /** The index in the trail at which a distance was obtained **/
-  TNodePairToUnsignedCDMap d_indices;
+  context::CDVector<unsigned> d_indices;
 
   /** The index in the trail at which a literal was asserted or propagated **/
   TNodeToUnsignedCDMap d_indices1;
@@ -93,7 +96,14 @@ class TheoryIdl : public Theory {
   context::CDO<unsigned> d_firstAtom;
   std::unordered_map<TNode, unsigned, TNodeHashFunction> d_atomToIndexMap;
 
- public:
+  unsigned d_numVars;
+
+inline unsigned pairToIndex(unsigned i, unsigned j)
+{
+  return i * d_numVars + j;
+}
+
+public:
   /** Theory constructor. */
   TheoryIdl(context::Context* c, context::UserContext* u, OutputChannel& out,
             Valuation valuation, const LogicInfo& logicInfo);
@@ -123,7 +133,6 @@ class TheoryIdl : public Theory {
   std::string identify() const { return "THEORY_IDL"; }
 
 }; /* class TheoryIdl */
-
 } /* CVC4::theory::idl namespace */
 } /* CVC4::theory namespace */
 } /* CVC4 namespace */

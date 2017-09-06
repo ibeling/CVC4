@@ -41,15 +41,18 @@ TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
       d_varList(c),
       d_allNodes(c),
       d_atomList(c),
-      d_firstAtom(c) {
+			d_firstAtom(c),
+      d_varMap(c),
+      d_numVars(0) {
   cout << "theory IDL constructed" << endl;
 }
 
 void TheoryIdl::preRegisterTerm(TNode node) {
   Assert(node.getKind() != kind::NOT);
-  if (node.isVar()) {
-    d_varList.push_back(node);
-    d_distances.insertAtContextLevelZero(std::make_pair(node, node), 0);
+  if (node.isVar()) {		
+    unsigned size = d_varMap.size();
+		d_varMap[node] = size;
+		d_varList.push_back(node);
     return;
   } else {
     IDLAssertion idl_assertion(node);
@@ -67,10 +70,11 @@ void TheoryIdl::preRegisterTerm(TNode node) {
       }
       atomentry.nextSteps = 0;
       atomentry.atom = node;
+      atomentry.x = d_varMap[idl_assertion.getX()];
+      atomentry.y = d_varMap[idl_assertion.getY()];      
+      atomentry.c = idl_assertion.getC();
       atomentry.pos = d_atomList.size();
       d_atomList.push_back(atomentry);
-      // d_atomToNegAtomMap[node] = NodeManager::currentNM()->mkNode(kind::NOT,
-      // node);
       d_atomToIndexMap[node] = d_atomList.size() - 1;
     }
   }
@@ -79,6 +83,18 @@ void TheoryIdl::preRegisterTerm(TNode node) {
 void TheoryIdl::presolve() {
   // Debug("theory::idl") << "TheoryIdl::preSolve(): d_numVars = " << d_numVars
   // << std::endl;
+  d_numVars = d_varMap.size();
+  for (unsigned i = 0 ; i < d_numVars; ++i) {
+    for (unsigned j = 0; j < d_numVars; ++j) {
+      d_distances.push_back(0);
+      d_indices.push_back(0);
+      if (i == j) {
+        d_valid.push_back(true);
+      } else {
+        d_valid.push_back(false);
+      }
+    }
+  }
 }
 
 void TheoryIdl::postsolve() {
@@ -104,33 +120,21 @@ void TheoryIdl::propagate(Effort level) {
   AtomListEntry entry = d_atomList.get(d_firstAtom.get());
   while (entry.nextSteps != 0) {
     TNode node = entry.atom;
-    //	  cout << "considering " << node << endl;
-    // 	  cout << "next " << entry.nextSteps << " prev " << entry.prevSteps << "
-    // pos " << entry.pos << endl;
-
     // bool alreadyAssigned = d_valuation.hasSatValue(node, value);
-    // Assert(!alreadyAssigned);
-    IDLAssertion idl_assertion(node);
-    TNode x = idl_assertion.getX();
-    TNode y = idl_assertion.getY();
-    Integer c = idl_assertion.getC();
-    TNodePair xy = std::make_pair(x, y);
-    if (d_distances.contains(xy) && (d_distances[xy].get() <= c)) {
+    unsigned xy = pairToIndex(entry.x, entry.y);
+    if (d_valid[xy] && (d_distances[xy] <= entry.c)) {
       d_indices1[node] = d_indices[xy];
-      // 	      cout << "propagating " << node << endl;
       d_out->propagate(node);
     }
 
-    TNodePair yx = std::make_pair(y, x);
-    if (d_distances.contains(yx) && (d_distances[yx].get() < -c)) {
+    unsigned yx = pairToIndex(y, x);
+    if (d_valid[yx] && (d_distances[yx] < -entry.c)) {
       TNode nn = NodeManager::currentNM()->mkNode(kind::NOT, node);
       d_indices1[nn] = d_indices[yx];
-      // 	      	      cout << "propagating " << notNode << endl;
       d_out->propagate(nn);
     }
 
     unsigned nextIndex = entry.pos + entry.nextSteps;
-    // 	    cout << "next Index  " << nextIndex << endl;
 
     entry = d_atomList.get(nextIndex);
   }
@@ -249,76 +253,71 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
                                  const TNode& original) {
   Assert(assertion.ok());
 
-  TNode x = assertion.getX();
-  TNode y = assertion.getY();
   Integer c = assertion.getC();
-  TNodePair xy = std::make_pair(x, y);
-  TNodePair yx = std::make_pair(y, x);
+
+  unsigned x = d_varMap[assertion.getX()];
+  unsigned y = d_varMap[assertion.getY()];
+
+  unsigned yx = pairToIndex(y, x);
 
   // Check whether we introduce a negative cycle.
-  if (d_distances.contains(yx) && ((d_distances[yx].get() + c) < 0)) {
+  if (d_valid[yx] && (d_distances[yx] + c) < 0)) {
     return false;
   }
 
+  unsigned xy = pairToIndex(x, y);
   // Check whether assertion is redundant
-  if (d_distances.contains(xy) && (d_distances[xy].get() <= c)) {
+  if (d_valid[xy] && (d_distances[xy] <= c)) {
     //	  cout << "redundant!" << endl;
     return true;
   }
 
   // Put assertion on  the trail.
   TrailEntry assertionEntry;
-  assertionEntry.x = x;
-  assertionEntry.y = y;
-  assertionEntry.c = c;
   assertionEntry.original = original;
   d_trail.push_back(assertionEntry);
   unsigned xyIndex = d_trail.size() - 1;
 
   // Find shortest paths incrementally
-  std::vector<TNode> valid_vars;
-  for (unsigned i = 0; i < d_varList.size(); ++i) {
-    TNode z = d_varList[i];
-    TNodePair yz = std::make_pair(y, z);
-    TNodePair xz = std::make_pair(x, z);  // TODO: eliminate double lookups
-    if (d_distances.contains(yz) &&
-        ((!d_distances.contains(xz)) ||
-         ((c + d_distances[yz].get()) < d_distances[xz].get()))) {
+  std::vector<unsigned> valid_vars;
+  valid_vars.reserve(d_numVars);
+  for (unsigned z = 0; z < d_numVars; ++z) {
+    unsigned yz = pairToIndex(y, z);
+    unsigned xz = pairToIndex(x, z);  // TODO: eliminate double lookups
+    if (d_valid[yz] &&
+        ((!d_valid[xz]) ||
+         ((c + d_distances[yz]) < d_distances[xz])) ) {
       valid_vars.push_back(z);
     }
   }
-  for (unsigned i = 0; i < d_varList.size(); ++i) {
-    TNode z = d_varList[i];
-    TNodePair zx = std::make_pair(z, x);
-    TNodePair zy = std::make_pair(z, y);
-    if (d_distances.contains(zx) &&
-        ((!d_distances.contains(zy)) ||
-         ((c + d_distances[zx].get()) < d_distances[zy].get()))) {
-      for (unsigned j = 0; j < valid_vars.size(); ++j) {
-        TNode v = valid_vars[j];
+  unsigned vvsize = valid_vars.size();  
+  for (unsigned z = 0; z < d_numVars; ++z) {
+    unsigned zx = pairToIndex(z, x);
+    unsigned zy = pairToIndex(z, y);
+    if (d_valid[zx] &&
+        ((!d_valid[zy]) ||
+         ((c + d_distances[zx]) < d_distances[zy]))) {
+      for (unsigned i = 0; i < vvsize; ++i) {
+        unsigned v = valid_vars[i];
         if (v == z) {
           continue;
         }
-        TNodePair yv = std::make_pair(y, v);
-        TNodePair zv = std::make_pair(z, v);
+        unsigned yv = pairToIndex(y, v);
+        unsigned zv = pairToIndex(z, v);
         // Path z ~ x -> y ~ v
         // Three reasons: this assertion, the reason for z ~ x, and the reason
         // for y ~ v.
-        Integer dist = c + d_distances[zx].get() + d_distances[yv].get();
-        if ((!d_distances.contains(zv)) || (dist < d_distances[zv].get())) {
-          d_distances[zv] = dist;
+        Integer dist = c + d_distances[zx] + d_distances[yv];
+        if ((!d_valid[zv]) || (dist < d_distances[zv])) {
+          d_distances.set(zv, dist);
+          d_valid.set(zv, true);
 
           TrailEntry zvEntry;
-          zvEntry.x = z;
-          zvEntry.y = v;
-          zvEntry.c = c;
           if (z != x) {
-            Assert(d_indices.contains(zx));
-            zvEntry.reasons.push_back(d_indices[zx]);
+            zvEntry.reasons.push_back(d_indices[pairToIndex(z, x)]);
           }
           zvEntry.reasons.push_back(xyIndex);
           if (y != v) {
-            Assert(d_indices.contains(yv));
             zvEntry.reasons.push_back(d_indices[yv]);
           }
           if (z != x || y != v) {
