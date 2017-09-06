@@ -128,7 +128,7 @@ void TheoryIdl::propagate(Effort level) {
       d_out->propagate(node);
     }
 
-    unsigned yx = pairToIndex(y, x);
+    unsigned yx = pairToIndex(entry.y, entry.x);
     if (d_valid[yx] && (d_distances[yx] < -entry.c)) {
       TNode nn = NodeManager::currentNM()->mkNode(kind::NOT, node);
       d_indices1[nn] = d_indices[yx];
@@ -237,7 +237,9 @@ void TheoryIdl::check(Effort level) {
       // cout << "conflict! " << assertion << endl;
       // d_propagationQueue.clear();
       std::vector<TNode> reasonslist;
-      TNodePair yx = std::make_pair(idl_assertion.getY(), idl_assertion.getX());
+
+      unsigned yx = pairToIndex(d_varMap[idl_assertion.getY()], d_varMap[idl_assertion.getX()]);
+
       getPath(d_indices[yx], reasonslist);
       // cout << "CONFLICT was " << valgp << " and size = " <<
       // reasonslist.size() << endl;
@@ -262,7 +264,7 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
   unsigned yx = pairToIndex(y, x);
 
   // Check whether we introduce a negative cycle.
-  if (d_valid[yx] && (d_distances[yx] + c) < 0)) {
+  if (d_valid[yx] && (d_distances[yx] + c) < 0) {
     return false;
   }
 
@@ -323,9 +325,9 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
           }
           if (z != x || y != v) {
             d_trail.push_back(zvEntry);
-            d_indices[zv] = d_trail.size() - 1;
+            d_indices.set(zv, d_trail.size() - 1);
           } else {
-            d_indices[zv] = xyIndex;
+            d_indices.set(zv, xyIndex);
           }
 
           // assert, assert, infer, prop, prop
