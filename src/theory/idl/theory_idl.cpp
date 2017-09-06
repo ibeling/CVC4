@@ -126,7 +126,7 @@ namespace CVC4 {
 
 	    TNodePair yx = std::make_pair(y, x);
 	    if (d_valid.contains(yx) && (d_distances[yx].get() < -c)) {
-				TNode nn = d_atomToNegAtomMap[node];
+	      TNode nn = d_atomToNegAtomMap[node];
 	      d_indices1[nn] = d_indices[yx];
 	      // 	      	      cout << "propagating " << notNode << endl;
 	      d_out->propagate(nn);
@@ -190,8 +190,6 @@ namespace CVC4 {
 	      //	      cout << "assert " << assertiontnode << endl;
 
 				assertiontnode = assertion.assertion[0];
-
-
 	    }
 	  				index = d_atomToIndexMap[assertiontnode];
 
