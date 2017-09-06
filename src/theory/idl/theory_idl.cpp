@@ -43,7 +43,8 @@ TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
       d_atomList(c),
 			d_firstAtom(c),
       d_varMap(c),
-      d_numVars(0) {
+      d_numVars(0),
+      d_valid(c) {
   cout << "theory IDL constructed" << endl;
 }
 
