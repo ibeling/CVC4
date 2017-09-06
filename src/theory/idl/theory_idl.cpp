@@ -42,7 +42,8 @@ namespace CVC4 {
 	  d_varList(c),
 	  d_allNodes(c),
 	  d_atomList(c),
-	  d_firstAtom(c)
+		d_firstAtom(c),
+		d_negAtomList(c)
       {
 	 	cout << "theory IDL constructed" << endl;
       }
@@ -74,6 +75,8 @@ namespace CVC4 {
 		atomentry.atom = node;
 		atomentry.pos = d_atomList.size();
 		d_atomList.push_back(atomentry);
+		TNode blankNode;
+		d_negAtomList.push_back(blankNode);
 		d_atomToIndexMap[node] = d_atomList.size() - 1;
 	  }
 	}
@@ -110,8 +113,8 @@ namespace CVC4 {
 	  //	  cout << "considering " << node << endl;
 	  // 	  cout << "next " << entry.nextSteps << " prev " << entry.prevSteps << " pos " << entry.pos << endl; 
 
-	    bool alreadyAssigned = d_valuation.hasSatValue(node, value);
-	    Assert(!alreadyAssigned);
+	    //bool alreadyAssigned = d_valuation.hasSatValue(node, value);
+	    // Assert(!alreadyAssigned);
 	    IDLAssertion idl_assertion(node);
 	    TNode x = idl_assertion.getX();
 	    TNode y = idl_assertion.getY();
@@ -126,13 +129,14 @@ namespace CVC4 {
 	    TNodePair yx = std::make_pair(y, x);
 	    if (d_valid.contains(yx) && (d_distances[yx].get() < -c)) {
 				TNode nn;
-				if ( d_atomToNegAtomMap.find(node) == d_atomToNegAtomMap.end() )
+				unsigned index = d_atomToIndexMap[node];
+				if ( d_negAtomList[index].isNull() )
 				{
 					Node notNode = NodeManager::currentNM()->mkNode(kind::NOT, node);
-					d_atomToNegAtomMap[node] = notNode;
+					d_negAtomList[index] = notNode;
 					nn = notNode;
 				} else {
-					nn = d_atomToNegAtomMap[node];
+					nn = d_negAtomLIst[index];
 				}
 	      d_indices1[nn] = d_indices[yx];
 	      // 	      	      cout << "propagating " << notNode << endl;
@@ -190,19 +194,20 @@ namespace CVC4 {
 	  // Get the next assertion
 	  Assertion assertion = get();
 	  TNode assertiontnode = assertion.assertion;
-	  //	  cout << "Asserted " << assertiontnode << endl;
+		//	  cout << "Asserted " << assertiontnode << endl;
+		unsigned index = d_atomToIndexMap[assertiontnode];
 	  if (assertiontnode.getKind() == kind::NOT)
 	    {
 	      //	      cout << "assert " << assertiontnode << endl;
 
 				assertiontnode = assertion.assertion[0];
-				d_atomToNegAtomMap[assertiontnode] = assertion.assertion;
+				d_negAtomList[index] = assertion.assertion;
 	    }
 
 	  //assertiontnode is now an atom
 
 	  //	  cout << "asserting atom " << assertiontnode << endl;
-	  unsigned index = d_atomToIndexMap[assertiontnode];
+	  
 	  //	  cout << "deleting entry at index " << index << endl;
 	  AtomListEntry entry = d_atomList.get(index);
 
