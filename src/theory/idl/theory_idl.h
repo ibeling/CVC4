@@ -96,7 +96,8 @@ namespace CVC4 {
 	context::CDO<unsigned> d_firstAtom;
 	std::unordered_map<TNode, unsigned, TNodeHashFunction> d_atomToIndexMap;
 
-	std::vector<TNode> d_negAtomList;
+
+	std::unordered_map<TNode, TNode, TNodeHashFunction> d_atomToNegAtomMap;
 
       public:
 	/** Theory constructor. */

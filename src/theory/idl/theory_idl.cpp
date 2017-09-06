@@ -42,8 +42,7 @@ namespace CVC4 {
 	  d_varList(c),
 	  d_allNodes(c),
 	  d_atomList(c),
-		d_firstAtom(c),
-		d_negAtomList(c)
+		d_firstAtom(c)
       {
 	 	cout << "theory IDL constructed" << endl;
       }
@@ -75,8 +74,7 @@ namespace CVC4 {
 		atomentry.atom = node;
 		atomentry.pos = d_atomList.size();
 		d_atomList.push_back(atomentry);
-		TNode blankNode;
-		d_negAtomList.push_back(blankNode);
+		d_atomToNegAtomMap[node] = NodeManager::currentNM()->mkNode(kind::NOT, node);
 		d_atomToIndexMap[node] = d_atomList.size() - 1;
 	  }
 	}
@@ -128,16 +126,7 @@ namespace CVC4 {
 
 	    TNodePair yx = std::make_pair(y, x);
 	    if (d_valid.contains(yx) && (d_distances[yx].get() < -c)) {
-				TNode nn;
-				unsigned index = d_atomToIndexMap[node];
-				if ( d_negAtomList[index].isNull() )
-				{
-					Node notNode = NodeManager::currentNM()->mkNode(kind::NOT, node);
-					d_negAtomList[index] = notNode;
-					nn = notNode;
-				} else {
-					nn = d_negAtomLIst[index];
-				}
+				TNode nn = d_atomToNegAtomMap[node];
 	      d_indices1[nn] = d_indices[yx];
 	      // 	      	      cout << "propagating " << notNode << endl;
 	      d_out->propagate(nn);
@@ -195,14 +184,16 @@ namespace CVC4 {
 	  Assertion assertion = get();
 	  TNode assertiontnode = assertion.assertion;
 		//	  cout << "Asserted " << assertiontnode << endl;
-		unsigned index = d_atomToIndexMap[assertiontnode];
+	  unsigned index;
 	  if (assertiontnode.getKind() == kind::NOT)
 	    {
 	      //	      cout << "assert " << assertiontnode << endl;
 
 				assertiontnode = assertion.assertion[0];
-				d_negAtomList[index] = assertion.assertion;
+
+
 	    }
+	  				index = d_atomToIndexMap[assertiontnode];
 
 	  //assertiontnode is now an atom
 
