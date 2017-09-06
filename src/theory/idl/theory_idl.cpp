@@ -72,7 +72,7 @@ namespace CVC4 {
 		atomentry.atom = node;
 		atomentry.pos = d_atomList.size();
 		d_atomList.push_back(atomentry);
-		d_atomToNegAtomMap[node] = NodeManager::currentNM()->mkNode(kind::NOT, node);
+		// d_atomToNegAtomMap[node] = NodeManager::currentNM()->mkNode(kind::NOT, node);
 		d_atomToIndexMap[node] = d_atomList.size() - 1;
 	  }
 	}
@@ -124,7 +124,7 @@ namespace CVC4 {
 
 	    TNodePair yx = std::make_pair(y, x);
 	    if (d_distances.contains(yx) && (d_distances[yx].get() < -c)) {
-	      TNode nn = d_atomToNegAtomMap[node];
+	      TNode nn = NodeManager::currentNM()->mkNode(kind::NOT, node);
 	      d_indices1[nn] = d_indices[yx];
 	      // 	      	      cout << "propagating " << notNode << endl;
 	      d_out->propagate(nn);
