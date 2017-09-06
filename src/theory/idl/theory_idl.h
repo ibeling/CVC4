@@ -94,7 +94,6 @@ namespace CVC4 {
 	std::unordered_map<TNode, unsigned, TNodeHashFunction> d_atomToIndexMap;
 
 
-	std::unordered_map<TNode, TNode, TNodeHashFunction> d_atomToNegAtomMap;
 
       public:
 	/** Theory constructor. */
