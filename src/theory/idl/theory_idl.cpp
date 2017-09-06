@@ -35,7 +35,6 @@ namespace CVC4 {
 	: Theory(THEORY_ARITH, c, u, out, valuation, logicInfo),
 	  d_trail(c),
 	  d_distances(c),
-	  d_valid(c),
 	  d_propagationEdges(c),
 	  d_indices(c),
 	  d_indices1(c),
@@ -52,7 +51,6 @@ namespace CVC4 {
 	if (node.isVar()) {
 	  d_varList.push_back(node);
 	  d_distances.insertAtContextLevelZero(std::make_pair(node, node), 0);
-	  d_valid.insertAtContextLevelZero(std::make_pair(node, node));
 	  return;
 	} else {
 	  IDLAssertion idl_assertion(node);
@@ -118,14 +116,14 @@ namespace CVC4 {
 	    TNode y = idl_assertion.getY();
 	    Integer c = idl_assertion.getC();
 	    TNodePair xy = std::make_pair(x, y);
-	    if (d_valid.contains(xy) && (d_distances[xy].get() <= c)) {
+	    if (d_distances.contains(xy) && (d_distances[xy].get() <= c)) {
 	      d_indices1[node] = d_indices[xy];
 	      // 	      cout << "propagating " << node << endl;
 	      d_out->propagate( node );
 	    }
 
 	    TNodePair yx = std::make_pair(y, x);
-	    if (d_valid.contains(yx) && (d_distances[yx].get() < -c)) {
+	    if (d_distances.contains(yx) && (d_distances[yx].get() < -c)) {
 	      TNode nn = d_atomToNegAtomMap[node];
 	      d_indices1[nn] = d_indices[yx];
 	      // 	      	      cout << "propagating " << notNode << endl;
@@ -268,12 +266,12 @@ namespace CVC4 {
 	TNodePair yx = std::make_pair(y, x);
 
 	// Check whether we introduce a negative cycle.
-	if (d_valid.contains(yx) && ((d_distances[yx].get() + c) < 0)) {
+	if (d_distances.contains(yx) && ((d_distances[yx].get() + c) < 0)) {
 	  return false;
 	}
 
 	// Check whether assertion is redundant
-	if (d_valid.contains(xy) && (d_distances[xy].get() <= c)) {
+	if (d_distances.contains(xy) && (d_distances[xy].get() <= c)) {
 	  //	  cout << "redundant!" << endl;
 	  return true;
 	}
@@ -293,8 +291,8 @@ namespace CVC4 {
 	  TNode z = d_varList[i];
 	  TNodePair yz = std::make_pair(y, z);
 	  TNodePair xz = std::make_pair(x, z);  // TODO: eliminate double lookups
-	  if (d_valid.contains(yz) &&
-	      ((!d_valid.contains(xz)) ||
+	  if (d_distances.contains(yz) &&
+	      ((!d_distances.contains(xz)) ||
 	       ((c + d_distances[yz].get()) < d_distances[xz].get()))) {
 	    valid_vars.push_back(z);
 	  }
@@ -303,8 +301,8 @@ namespace CVC4 {
 	  TNode z = d_varList[i];
 	  TNodePair zx = std::make_pair(z, x);
 	  TNodePair zy = std::make_pair(z, y);
-	  if (d_valid.contains(zx) &&
-	      ((!d_valid.contains(zy)) ||
+	  if (d_distances.contains(zx) &&
+	      ((!d_distances.contains(zy)) ||
 	       ((c + d_distances[zx].get()) < d_distances[zy].get()))) {
 	    for (unsigned j = 0; j < valid_vars.size(); ++j) {
 	      TNode v = valid_vars[j];
@@ -317,13 +315,8 @@ namespace CVC4 {
 	      // Three reasons: this assertion, the reason for z ~ x, and the reason
 	      // for y ~ v.
 	      Integer dist = c + d_distances[zx].get() + d_distances[yv].get();
-	      if ((!d_valid.contains(zv)) || (dist < d_distances[zv].get())) {
-		if (!d_valid.contains(zv)) {
-		  d_distances[zv] = dist;
-		  d_valid.insert(zv);
-		} else {
-		  d_distances[zv] = dist;
-		}
+	      if ((!d_distances.contains(zv)) || (dist < d_distances[zv].get())) {
+		d_distances[zv] = dist;
 
 		TrailEntry zvEntry;
 		zvEntry.x = z;

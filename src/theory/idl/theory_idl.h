@@ -75,9 +75,6 @@ namespace CVC4 {
 	/** Shortest path matrix **/
 	TNodePairToIntegerCDMap d_distances;
 
-	/** Whether there is any edge **/
-	TNodePairCDSet d_valid;
-
 	/** Edges associated to a given pair for propagation **/
 	TNodePairToTNodeVectorCDMap d_propagationEdges;
 
