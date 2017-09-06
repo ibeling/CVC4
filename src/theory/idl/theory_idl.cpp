@@ -129,10 +129,10 @@ namespace CVC4 {
 				if ( d_atomToNegAtomMap.find(node) == d_atomToNegAtomMap.end() )
 				{
 					Node notNode = NodeManager::currentNM()->mkNode(kind::NOT, node);
-					d_atomToNegAtomMap[atom] = notNode;
+					d_atomToNegAtomMap[node] = notNode;
 					nn = notNode;
 				} else {
-					nn = d_atomToNegAtomMap[atom];
+					nn = d_atomToNegAtomMap[node];
 				}
 	      d_indices1[nn] = d_indices[yx];
 	      // 	      	      cout << "propagating " << notNode << endl;
