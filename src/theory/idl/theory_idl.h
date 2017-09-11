@@ -42,6 +42,10 @@ class AtomListEntry {
 
 class TrailEntry {
 public:
+  TrailEntry() {
+    reasons.reserve(3);
+  }
+  
   TNode original;
   std::vector<unsigned> reasons;
 };
