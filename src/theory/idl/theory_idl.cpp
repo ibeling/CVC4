@@ -98,9 +98,6 @@ void TheoryIdl::presolve() {
       }
     }
   }
-  unsigned trailSize = d_numVars * d_numVars / 2;
-  cout << "trail size " << trailSize << endl;
-  d_trail.reserve(trailSize);
 }
 
 void TheoryIdl::postsolve() {
