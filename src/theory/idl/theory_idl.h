@@ -75,7 +75,7 @@ class TheoryIdl : public Theory {
   bool donePreprocess = false;
 
   /** Trail of literals, either asserted or inferred **/
-  context::CDVector<TrailEntry> d_trail;
+  TrailType d_trail;
 
   /** Shortest path matrix **/
   context::CDVector<int> d_distances;
