@@ -75,7 +75,7 @@ void TheoryIdl::preRegisterTerm(TNode node) {
       atomentry.atom = node;
       atomentry.x = d_varMap[idl_assertion.getX()];
       atomentry.y = d_varMap[idl_assertion.getY()];      
-      atomentry.c = idl_assertion.getC().getLong();
+      atomentry.c = idl_assertion.getC().getSignedInt();
       atomentry.pos = d_atomList.size();
       d_atomList.push_back(atomentry);
       d_atomToIndexMap[node] = d_atomList.size() - 1;
@@ -98,7 +98,7 @@ void TheoryIdl::presolve() {
       }
     }
   }
-  unsigned trailSize = d_numVars * d_numVars * d_numVars / 2;
+  unsigned trailSize = d_numVars * d_numVars / 2;
   cout << "trail size " << trailSize << endl;
   d_trail.reserve(trailSize);
 }
@@ -261,7 +261,7 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
                                  const TNode& original) {
   Assert(assertion.ok());
 
-  long c = assertion.getC().getLong();
+  int c = assertion.getC().getSignedInt();
 
   unsigned x = d_varMap[assertion.getX()];
   unsigned y = d_varMap[assertion.getY()];
@@ -315,7 +315,7 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
         // Path z ~ x -> y ~ v
         // Three reasons: this assertion, the reason for z ~ x, and the reason
         // for y ~ v.
-        long dist = c + d_distances[zx] + d_distances[yv];
+        int dist = c + d_distances[zx] + d_distances[yv];
         if ((!d_valid[zv]) || (dist < d_distances[zv])) {
           d_distances.set(zv, dist);
           d_valid.set(zv, true);
