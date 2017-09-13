@@ -154,6 +154,10 @@ public:
     d_current.pop_back();
   }
 
+  void reserve(unsigned size) {
+    d_current.reserve(size);
+  }
+
 };/* class CDVector<T> */
 
 }/* CVC4::context namespace */

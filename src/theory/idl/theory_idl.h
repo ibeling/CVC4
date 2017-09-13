@@ -102,6 +102,8 @@ class TheoryIdl : public Theory {
 
   unsigned d_numVars;
 
+  unsigned d_numAssertions;
+
 inline unsigned pairToIndex(unsigned i, unsigned j)
 {
   return i * d_numVars + j;

@@ -44,6 +44,7 @@ TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
 			d_firstAtom(c),
       d_varMap(c),
       d_numVars(0),
+      d_numAssertions(0),
       d_valid(c) {
   cout << "theory IDL constructed" << endl;
 }
@@ -58,6 +59,7 @@ void TheoryIdl::preRegisterTerm(TNode node) {
   } else {
     IDLAssertion idl_assertion(node);
     if (idl_assertion.ok()) {
+      d_numAssertions++;
       Assert(node.getKind() != kind::NOT);
       AtomListEntry atomentry;
       if (d_atomList.size() == 0) {
@@ -96,6 +98,9 @@ void TheoryIdl::presolve() {
       }
     }
   }
+  unsigned trailSize = d_numAssertions * d_numVars * d_numVars;
+  cout << "trail size " << trailSize << endl;
+  d_trail.reserve(trailSize);
 }
 
 void TheoryIdl::postsolve() {
