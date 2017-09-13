@@ -37,7 +37,7 @@ class AtomListEntry {
   TNode atom;
   unsigned x;
   unsigned y;
-  long c;
+  int c;
 };
 
 class TrailEntry {
@@ -78,7 +78,7 @@ class TheoryIdl : public Theory {
   context::CDVector<TrailEntry> d_trail;
 
   /** Shortest path matrix **/
-  context::CDVector<long> d_distances;
+  context::CDVector<int> d_distances;
   context::CDVector<bool> d_valid;
   context::CDHashMap<TNode, unsigned, TNodeHashFunction> d_varMap;
 
