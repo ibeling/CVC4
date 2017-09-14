@@ -46,7 +46,7 @@ TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
       d_numVars(0),
       d_numAssertions(0),
       d_valid(c) {
-  cout << "theory IDL constructed" << endl;
+
 }
 
 void TheoryIdl::preRegisterTerm(TNode node) {
@@ -120,7 +120,13 @@ void TheoryIdl::propagate(Effort level) {
   // cout << "The first index is  " << d_firstAtom.get() << endl;
 
   bool value;
-  AtomListEntry entry = d_atomList.get(d_firstAtom.get());
+    unsigned firstIndex = d_firstAtom.get();
+    if (firstIndex >= d_atomList.size()) {
+      Assert(d_atomList.empty());
+      Assert(firstIndex == 0);
+      return;
+    }
+  AtomListEntry entry = d_atomList.get(firstIndex);
   while (entry.nextSteps != 0) {
     TNode node = entry.atom;
     // bool alreadyAssigned = d_valuation.hasSatValue(node, value);
@@ -138,7 +144,6 @@ void TheoryIdl::propagate(Effort level) {
     }
 
     unsigned nextIndex = entry.pos + entry.nextSteps;
-
     entry = d_atomList.get(nextIndex);
   }
 }
@@ -197,6 +202,7 @@ void TheoryIdl::check(Effort level) {
     //	  cout << "asserting atom " << assertiontnode << endl;
 
     //	  cout << "deleting entry at index " << index << endl;
+
     AtomListEntry entry = d_atomList.get(index);
 
     //	  cout << entry.nextSteps << " " << entry.prevSteps << " " << entry.pos
@@ -205,11 +211,13 @@ void TheoryIdl::check(Effort level) {
     // delete from list
 
     if (entry.prevSteps != 0) {
+
       AtomListEntry prevEntry = d_atomList.get(entry.pos - entry.prevSteps);
       prevEntry.nextSteps = prevEntry.nextSteps + entry.nextSteps;
       d_atomList.set(prevEntry.pos, prevEntry);
     }
     if (entry.nextSteps != 0) {
+
       AtomListEntry nextEntry = d_atomList.get(entry.pos + entry.nextSteps);
       nextEntry.prevSteps = nextEntry.prevSteps + entry.prevSteps;
       d_atomList.set(nextEntry.pos, nextEntry);
@@ -220,7 +228,9 @@ void TheoryIdl::check(Effort level) {
     // besides this, next entry has to have prev set to zero.
     unsigned firstIndex = d_firstAtom.get();
     if (index == firstIndex) {
+      
       if (entry.nextSteps != 0) {
+
         AtomListEntry afterFirst = d_atomList.get(entry.nextSteps + index);
         afterFirst.prevSteps = 0;
         d_atomList.set(entry.nextSteps + index, afterFirst);

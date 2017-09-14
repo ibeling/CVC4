@@ -71,7 +71,7 @@ TheoryBV::TheoryBV(context::Context* c, context::UserContext* u,
     d_extf_range_infer(u),
     d_extf_collapse_infer(u)
 {
-  cout << "theory bv " << endl;
+
 
   setupExtTheory();
   getExtTheory()->addFunctionKind(kind::BITVECTOR_TO_NAT);
