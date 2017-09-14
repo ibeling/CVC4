@@ -78,15 +78,18 @@ class TheoryIdl : public Theory {
   TrailType d_trail;
 
   /** Shortest path matrix **/
-  context::CDVector<int> d_distances;
-  context::CDVector<bool> d_valid;
+  // context::CDVector<int> d_distances;
+  std::vector<context::CDO<int> > d_distances;
+  // context::CDVector<bool> d_valid;
+  std::vector<context::CDO<bool> > d_valid;
   context::CDHashMap<TNode, unsigned, TNodeHashFunction> d_varMap;
 
   /** Edges associated to a given pair for propagation **/
   TNodePairToTNodeVectorCDMap d_propagationEdges;
 
   /** The index in the trail at which a distance was obtained **/
-  context::CDVector<unsigned> d_indices;
+  // context::CDVector<unsigned> d_indices;
+  std::vector<context::CDO<unsigned> > d_indices;
 
   /** The index in the trail at which a literal was asserted or propagated **/
   TNodeToUnsignedCDMap d_indices1;
@@ -102,7 +105,7 @@ class TheoryIdl : public Theory {
 
   unsigned d_numVars;
 
-  unsigned d_numAssertions;
+  context::Context* d_context;
 
 inline unsigned pairToIndex(unsigned i, unsigned j)
 {
