@@ -43,6 +43,8 @@ TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
 			d_firstAtom(c),
       d_varMap(c),
       d_numVars(0),
+      d_distances(c),
+      d_indices(c),
       d_context(c) {
 
 }
@@ -84,19 +86,11 @@ void TheoryIdl::presolve() {
   // Debug("theory::idl") << "TheoryIdl::preSolve(): d_numVars = " << d_numVars
   // << std::endl;
   d_numVars = d_varMap.size();
-  unsigned d_numVars2 = d_numVars * d_numVars;
-  d_distances = new context::CDO<int>*[d_numVars2];
-  d_valid = new context::CDO<bool>*[d_numVars2];
-  d_indices = new context::CDO<unsigned>*[d_numVars2];
   for (unsigned i = 0 ; i < d_numVars; ++i) {
     for (unsigned j = 0; j < d_numVars; ++j) {
       unsigned ij = pairToIndex(i, j);
-      d_distances[ij] = ::new context::CDO<int>(d_context, 0);
-      d_indices[ij] = ::new context::CDO<unsigned>(d_context, 0);
       if (i == j) {
-	d_valid[ij] = ::new context::CDO<bool>(d_context, true);
-      } else {
-	d_valid[ij] = ::new context::CDO<bool>(d_context, false);
+	d_distances.insertAtContextLevelZero(ij, 0);
       }
     }
   }
@@ -104,15 +98,6 @@ void TheoryIdl::presolve() {
 
 void TheoryIdl::postsolve() {
   // Debug("theory::idl") << "TheoryIdl::postSolve()" << std::endl;
-  unsigned d_numVars2 = d_numVars * d_numVars;
-  for (unsigned i = 0; i < d_numVars2; ++i) {
-    ::delete d_distances[i];
-    ::delete d_valid[i];
-    ::delete d_indices[i];
-  }
-  delete [] d_distances;
-  delete [] d_valid;
-  delete [] d_indices;
 }
 
 Node TheoryIdl::ppRewrite(TNode atom) {
@@ -142,15 +127,15 @@ void TheoryIdl::propagate(Effort level) {
     TNode node = entry.atom;
     // bool alreadyAssigned = d_valuation.hasSatValue(node, value);
     unsigned xy = pairToIndex(entry.x, entry.y);
-    if (d_valid[xy]->get() && (d_distances[xy]->get() <= entry.c)) {
-      d_indices1[node] = d_indices[xy]->get();
+    if (d_distances.contains(xy) && (d_distances[xy].get() <= entry.c)) {
+      d_indices1[node] = d_indices[xy].get();
       d_out->propagate(node);
     }
 
     unsigned yx = pairToIndex(entry.y, entry.x);
-    if (d_valid[yx]->get() && (d_distances[yx]->get() < -entry.c)) {
+    if (d_distances.contains(yx) && (d_distances[yx].get() < -entry.c)) {
       TNode nn = NodeManager::currentNM()->mkNode(kind::NOT, node);
-      d_indices1[nn] = d_indices[yx]->get();
+      d_indices1[nn] = d_indices[yx].get();
       d_out->propagate(nn);
     }
 
@@ -263,7 +248,7 @@ void TheoryIdl::check(Effort level) {
 
       unsigned yx = pairToIndex(d_varMap[idl_assertion.getY()], d_varMap[idl_assertion.getX()]);
 
-      getPath(d_indices[yx]->get(), reasonslist);
+      getPath(d_indices[yx].get(), reasonslist);
       // cout << "CONFLICT was " << valgp << " and size = " <<
       // reasonslist.size() << endl;
       reasonslist.push_back(idl_assertion.getTNode());
@@ -287,13 +272,13 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
   unsigned yx = pairToIndex(y, x);
 
   // Check whether we introduce a negative cycle.
-  if (d_valid[yx]->get() && (d_distances[yx]->get() + c) < 0) {
+  if (d_distances.contains(yx) && (d_distances[yx].get() + c) < 0) {
     return false;
   }
 
   unsigned xy = pairToIndex(x, y);
   // Check whether assertion is redundant
-  if (d_valid[xy]->get() && (d_distances[xy]->get() <= c)) {
+  if (d_distances.contains(xy) && (d_distances[xy].get() <= c)) {
     //	  cout << "redundant!" << endl;
     return true;
   }
@@ -310,9 +295,9 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
   for (unsigned z = 0; z < d_numVars; ++z) {
     unsigned yz = pairToIndex(y, z);
     unsigned xz = pairToIndex(x, z);  // TODO: eliminate double lookups
-    if (d_valid[yz]->get() &&
-        ((!d_valid[xz]->get()) ||
-         ((c + d_distances[yz]->get()) < d_distances[xz]->get())) ) {
+    if (d_distances.contains(yz) &&
+        ((!d_distances.contains(xz)) ||
+         ((c + d_distances[yz].get()) < d_distances[xz].get())) ) {
       valid_vars.push_back(z);
     }
   }
@@ -320,9 +305,9 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
   for (unsigned z = 0; z < d_numVars; ++z) {
     unsigned zx = pairToIndex(z, x);
     unsigned zy = pairToIndex(z, y);
-    if (d_valid[zx]->get() &&
-        ((!d_valid[zy]->get()) ||
-         ((c + d_distances[zx]->get()) < d_distances[zy]->get()))) {
+    if (d_distances.contains(zx) &&
+        ((!d_distances.contains(zy)) ||
+         ((c + d_distances[zx].get()) < d_distances[zy].get()))) {
       for (unsigned i = 0; i < vvsize; ++i) {
         unsigned v = valid_vars[i];
         if (v == z) {
@@ -333,24 +318,23 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
         // Path z ~ x -> y ~ v
         // Three reasons: this assertion, the reason for z ~ x, and the reason
         // for y ~ v.
-        int dist = c + d_distances[zx]->get() + d_distances[yv]->get();
-        if ((!d_valid[zv]->get()) || (dist < d_distances[zv]->get())) {
-          d_distances[zv]->set(dist);
-          d_valid[zv]->set(true);
+        int dist = c + d_distances[zx].get() + d_distances[yv].get();
+        if ((!d_distances.contains(zv)) || (dist < d_distances[zv].get())) {
+          d_distances[zv].set(dist);
 
           TrailEntry zvEntry;
           if (z != x) {
-            zvEntry.reasons.push_back(d_indices[pairToIndex(z, x)]->get());
+            zvEntry.reasons.push_back(d_indices[pairToIndex(z, x)].get());
           }
           zvEntry.reasons.push_back(xyIndex);
           if (y != v) {
-            zvEntry.reasons.push_back(d_indices[yv]->get());
+            zvEntry.reasons.push_back(d_indices[yv].get());
           }
           if (z != x || y != v) {
             d_trail.push_back(zvEntry);
-            d_indices[zv]->set(d_trail.size() - 1);
+            d_indices[zv].set(d_trail.size() - 1);
           } else {
-            d_indices[zv]->set(xyIndex);
+            d_indices[zv].set(xyIndex);
           }
 
           // assert, assert, infer, prop, prop
