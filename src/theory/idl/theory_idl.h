@@ -79,9 +79,10 @@ class TheoryIdl : public Theory {
 
   /** Shortest path matrix **/
   // context::CDVector<int> d_distances;
-  context::CDO<int>** d_distances;
+  context::CDHashMap<unsigned, int> d_distances;
+  
   // context::CDVector<bool> d_valid;
-  context::CDO<bool>** d_valid;
+  // context::CDO<bool>** d_valid;
   context::CDHashMap<TNode, unsigned, TNodeHashFunction> d_varMap;
 
   /** Edges associated to a given pair for propagation **/
@@ -89,7 +90,7 @@ class TheoryIdl : public Theory {
 
   /** The index in the trail at which a distance was obtained **/
   // context::CDVector<unsigned> d_indices;
-  context::CDO<unsigned>** d_indices;
+  context::CDHashMap<unsigned, unsigned> d_indices;
 
   /** The index in the trail at which a literal was asserted or propagated **/
   TNodeToUnsignedCDMap d_indices1;
