@@ -49,7 +49,7 @@ TheorySetsPrivate::TheorySetsPrivate(TheorySets& external,
   d_var_elim(u),
   d_external(external),
   d_notify(*this),
-  d_equalityEngine(d_notify, c, "theory::sets::TheorySetsPrivate", true),
+  d_equalityEngine(d_notify, c, "theory::sets::ee", true),
   d_conflict(c)
 {
 
@@ -738,22 +738,21 @@ void TheorySetsPrivate::checkSubtypes( std::vector< Node >& lemmas ) {
     std::map< Node, std::map< Node, Node > >::iterator it = d_pol_mems[0].find( s );
     if( it!=d_pol_mems[0].end() ){
       for( std::map< Node, Node >::iterator it2 = it->second.begin(); it2 != it->second.end(); ++it2 ){
-        if( !it2->first.getType().isSubtypeOf( mct ) ){          
+        if (!it2->first.getType().isSubtypeOf(mct))
+        {
           Node mctt = d_most_common_type_term[s];
           std::vector< Node > exp;
           exp.push_back( it2->second );
           Assert( ee_areEqual( mctt, it2->second[1] ) );
           exp.push_back( mctt.eqNode( it2->second[1] ) );
-          Node etc = TypeNode::getEnsureTypeCondition( it2->first, mct );
-          if( !etc.isNull() ){
+          Node tc_k = getTypeConstraintSkolem(it2->first, mct);
+          if (!tc_k.isNull())
+          {
+            Node etc = tc_k.eqNode(it2->first);
             assertInference( etc, exp, lemmas, "subtype-clash" );
             if( d_conflict ){
               return;
-            } 
-          }else{
-            // very strange situation : we have a member in a set that is not a subtype, and we do not have a type condition for it
-            d_full_check_incomplete = true;
-            Trace("sets-incomplete") << "Sets : incomplete because of unknown type constraint." << std::endl;
+            }
           }
         }
       }
@@ -1686,6 +1685,18 @@ void TheorySetsPrivate::lastCallEffortCheck() {
 
 }
 
+Node TheorySetsPrivate::getTypeConstraintSkolem(Node n, TypeNode tn)
+{
+  std::map<TypeNode, Node>::iterator it = d_tc_skolem[n].find(tn);
+  if (it == d_tc_skolem[n].end())
+  {
+    Node k = NodeManager::currentNM()->mkSkolem("tc_k", tn);
+    d_tc_skolem[n][tn] = k;
+    return k;
+  }
+  return it->second;
+}
+
 /**************************** TheorySetsPrivate *****************************/
 /**************************** TheorySetsPrivate *****************************/
 /**************************** TheorySetsPrivate *****************************/
@@ -1911,16 +1922,19 @@ EqualityStatus TheorySetsPrivate::getEqualityStatus(TNode a, TNode b) {
 /******************** Model generation ********************/
 /******************** Model generation ********************/
 
-
-void TheorySetsPrivate::collectModelInfo(TheoryModel* m) {
+bool TheorySetsPrivate::collectModelInfo(TheoryModel* m)
+{
   Trace("sets-model") << "Set collect model info" << std::endl;
   set<Node> termSet;
   // Compute terms appearing in assertions and shared terms
   d_external.computeRelevantTerms(termSet);
   
   // Assert equalities and disequalities to the model
-  m->assertEqualityEngine(&d_equalityEngine,&termSet);
-  
+  if (!m->assertEqualityEngine(&d_equalityEngine, &termSet))
+  {
+    return false;
+  }
+
   std::map< Node, Node > mvals;
   for( int i=(int)(d_set_eqc.size()-1); i>=0; i-- ){
     Node eqc = d_set_eqc[i];
@@ -1970,10 +1984,14 @@ void TheorySetsPrivate::collectModelInfo(TheoryModel* m) {
       rep = Rewriter::rewrite( rep );
       Trace("sets-model") << "* Assign representative of " << eqc << " to " << rep << std::endl;
       mvals[eqc] = rep;
-      m->assertEquality( eqc, rep, true );
-      m->assertRepresentative( rep );
+      if (!m->assertEquality(eqc, rep, true))
+      {
+        return false;
+      }
+      m->assertSkeleton(rep);
     }
   }
+  return true;
 }
 
 /********************** Helper functions ***************************/

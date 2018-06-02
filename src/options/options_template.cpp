@@ -1,5 +1,5 @@
 /*********************                                                        */
-/*! \file options_template.cpp
+/*! \file options.cpp
  ** \verbatim
  ** Top contributors (to current version):
  **   Tim King, Morgan Deters, Kshitij Bansal
@@ -58,17 +58,15 @@ extern int optreset;
 #include "options/language.h"
 #include "options/options_handler.h"
 
-${include_all_option_headers}
+${headers_module}$
 
-#line 64 "${template}"
 
 #include "options/options_holder.h"
 #include "cvc4autoconfig.h"
 #include "options/base_handlers.h"
 
-${option_handler_includes}
+${headers_handler}$
 
-#line 72 "${template}"
 
 using namespace CVC4;
 using namespace CVC4::options;
@@ -388,9 +386,8 @@ Options::registerSetReplayLogFilename(
   return registerAndNotify(d_setReplayFilenameListeners, listener, notify);
 }
 
-${all_custom_handlers}
+${custom_handlers}$
 
-#line 394 "${template}"
 
 #ifdef CVC4_DEBUG
 #  define USE_EARLY_TYPE_CHECKING_BY_DEFAULT true
@@ -404,29 +401,30 @@ ${all_custom_handlers}
 #  define DO_SEMANTIC_CHECKS_BY_DEFAULT true
 #endif /* CVC4_MUZZLED || CVC4_COMPETITION_MODE */
 
-options::OptionsHolder::OptionsHolder() : ${all_modules_defaults}
+options::OptionsHolder::OptionsHolder() :
+  ${module_defaults}$
 {
 }
 
-#line 412 "${template}"
 
 static const std::string mostCommonOptionsDescription = "\
-Most commonly-used CVC4 options:${common_documentation}";
+Most commonly-used CVC4 options:\n"
+${help_common}$;
 
-#line 417 "${template}"
 
 static const std::string optionsDescription = mostCommonOptionsDescription + "\n\
 \n\
-Additional CVC4 options:${remaining_documentation}";
+Additional CVC4 options:\n"
+${help_others}$;
 
-#line 423 "${template}"
 
 static const std::string optionsFootnote = "\n\
 [*] Each of these options has a --no-OPTIONNAME variant, which reverses the\n\
     sense of the option.\n\
 ";
 
-static const std::string languageDescription = "\
+static const std::string languageDescription =
+    "\
 Languages currently supported as arguments to the -L / --lang option:\n\
   auto                           attempt to automatically determine language\n\
   cvc4 | presentation | pl       CVC4 presentation language\n\
@@ -435,6 +433,7 @@ Languages currently supported as arguments to the -L / --lang option:\n\
   smt2.0 | smtlib2 | smtlib2.0   SMT-LIB format 2.0\n\
   smt2.5 | smtlib2.5             SMT-LIB format 2.5\n\
   smt2.6 | smtlib2.6             SMT-LIB format 2.6\n\
+  smt2.6.1 | smtlib2.6.1         SMT-LIB format 2.6 with support for the strings standard\n\
   tptp                           TPTP format (cnf and fof)\n\
   sygus                          SyGuS format\n\
 \n\
@@ -442,11 +441,11 @@ Languages currently supported as arguments to the --output-lang option:\n\
   auto                           match output language to input language\n\
   cvc4 | presentation | pl       CVC4 presentation language\n\
   cvc3                           CVC3 presentation language\n\
-  smt1 | smtlib1                 SMT-LIB format 1.2\n\
   smt | smtlib | smt2 |\n\
   smt2.0 | smtlib2.0 | smtlib2   SMT-LIB format 2.0\n\
   smt2.5 | smtlib2.5             SMT-LIB format 2.5\n\
   smt2.6 | smtlib2.6             SMT-LIB format 2.6\n\
+  smt2.6.1 | smtlib2.6.1         SMT-LIB format 2.6 with support for the strings standard\n\
   tptp                           TPTP format\n\
   z3str                          SMT-LIB 2.0 with Z3-str string constraints\n\
   ast                            internal format (simple syntax trees)\n\
@@ -496,11 +495,11 @@ void Options::printLanguageHelp(std::ostream& out) {
  * If you add something that has a short option equivalent, you should
  * add it to the getopt_long() call in parseOptions().
  */
-static struct option cmdlineOptions[] = {${all_modules_long_options}
+static struct option cmdlineOptions[] = {
+  ${cmdline_options}$
   { NULL, no_argument, NULL, '\0' }
 };/* cmdlineOptions */
 
-#line 504 "${template}"
 
 // static void preemptGetopt(int& argc, char**& argv, const char* opt) {
 
@@ -551,11 +550,13 @@ public:
  * Parse argc/argv and put the result into a CVC4::Options.
  * The return value is what's left of the command line (that is, the
  * non-option arguments).
+ *
+ * Throws OptionException on failures.
  */
 std::vector<std::string> Options::parseOptions(Options* options,
-                                               int argc, char* argv[])
-  throw(OptionException) {
-
+                                               int argc,
+                                               char* argv[])
+{
   Assert(options != NULL);
   Assert(argv != NULL);
 
@@ -599,8 +600,7 @@ std::vector<std::string> Options::parseOptions(Options* options,
 void Options::parseOptionsRecursive(Options* options,
                                     ArgumentExtender* extender,
                                     std::vector<std::string>* nonoptions)
-  throw(OptionException) {
-
+{
   int argc;
   char** argv;
 
@@ -670,7 +670,7 @@ void Options::parseOptionsRecursive(Options* options,
     Debug("options") << "[ argc == " << argc << ", argv == " << argv << " ]"
                      << std::endl;
     int c = getopt_long(argc, argv,
-                        "+:${all_modules_short_options}",
+                        "+:${options_short}$",
                         cmdlineOptions, NULL);
 
     while(main_optind < optind) {
@@ -720,9 +720,8 @@ void Options::parseOptionsRecursive(Options* options,
                            << " (`" << char(c) << "'), " << option << std::endl;
 
     switch(c) {
-${all_modules_option_handlers}
+${options_handler}$
 
-#line 726 "${template}"
 
     case ':':
       // This can be a long or short option, and the way to get at the
@@ -733,8 +732,8 @@ ${all_modules_option_handlers}
     case '?':
     default:
       if( ( optopt == 0 ||
-            ( optopt >= ${long_option_value_begin} &&
-              optopt <= ${long_option_value_end} )
+            ( optopt >= ${option_value_begin}$ &&
+              optopt <= ${option_value_end}$ )
           ) && !strncmp(argv[optind - 1], "--thread", 8) &&
           strlen(argv[optind - 1]) > 8 )
       {
@@ -787,7 +786,8 @@ ${all_modules_option_handlers}
   free(argv);
 }
 
-std::string Options::suggestCommandLineOptions(const std::string& optionName) throw() {
+std::string Options::suggestCommandLineOptions(const std::string& optionName)
+{
   DidYouMean didYouMean;
 
   const char* opt;
@@ -799,12 +799,13 @@ std::string Options::suggestCommandLineOptions(const std::string& optionName) th
 }
 
 static const char* smtOptions[] = {
-  ${all_modules_smt_options},
-#line 804 "${template}"
+  ${options_smt}$
   NULL
 };/* smtOptions[] */
 
-std::vector<std::string> Options::suggestSmtOptions(const std::string& optionName) throw() {
+std::vector<std::string> Options::suggestSmtOptions(
+    const std::string& optionName)
+{
   std::vector<std::string> suggestions;
 
   const char* opt;
@@ -817,18 +818,40 @@ std::vector<std::string> Options::suggestSmtOptions(const std::string& optionNam
   return suggestions;
 }
 
-std::vector< std::vector<std::string> > Options::getOptions() const throw() {
+std::vector<std::vector<std::string> > Options::getOptions() const
+{
   std::vector< std::vector<std::string> > opts;
 
-  ${all_modules_get_options}
+  ${options_getoptions}$
 
-#line 826 "${template}"
 
   return opts;
 }
 
+void Options::setOption(const std::string& key, const std::string& optionarg)
+{
+  options::OptionsHandler* handler = d_handler;
+  Options *options = Options::current();
+  Trace("options") << "SMT setOption(" << key << ", " << optionarg << ")"
+                   << std::endl;
+
+  ${setoption_handlers}$
+
+
+  throw UnrecognizedOptionException(key);
+}
+
+std::string Options::getOption(const std::string& key) const
+{
+  Trace("options") << "SMT getOption(" << key << ")" << std::endl;
+
+  ${getoption_handlers}$
+
+
+  throw UnrecognizedOptionException(key);
+}
 
 #undef USE_EARLY_TYPE_CHECKING_BY_DEFAULT
 #undef DO_SEMANTIC_CHECKS_BY_DEFAULT
 
-}/* CVC4 namespace */
+}  // namespace CVC4

@@ -23,7 +23,6 @@
 #include "util/hash.h"
 #include "theory/theory.h"
 #include "theory/rewriter.h"
-#include "context/cdchunk_list.h"
 #include "context/cdhashmap.h"
 
 namespace CVC4 {
@@ -34,6 +33,7 @@ class StringsPreprocess {
   //Constants
   Node d_zero;
   Node d_one;
+  Node d_empty_str;
   //mapping from kinds to UF
   std::map< Kind, std::map< unsigned, Node > > d_uf;
   //get UF for node

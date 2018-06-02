@@ -128,10 +128,10 @@ public:
   void postsolve();
 
   /** Pre-processing of input atoms */
-  Node ppRewrite(TNode atom);
+  Node ppRewrite(TNode atom) override;
 
   /** Check the assertions for satisfiability */
-  void check(Effort effort);
+  void check(Effort effort) override;
 
   void propagate(Effort level);
 
@@ -140,7 +140,7 @@ public:
   Node explain(TNode n);
 
   /** Identity string */
-  std::string identify() const { return "THEORY_IDL"; }
+  std::string identify() const override { return "THEORY_IDL"; }
 
 }; /* class TheoryIdl */
 } /* CVC4::theory::idl namespace */

@@ -44,17 +44,13 @@ class SygusInput : public AntlrInput {
   /** The ANTLR3 SMT2 parser for the input. */
   pSmt2Parser d_pSmt2Parser;
 
-  /** Which (variant of the) input language we're using */
-  InputLanguage d_lang;
-
   /**
    * Initialize the class. Called from the constructors once the input
    * stream is initialized.
    */
   void init();
 
-public:
-
+ public:
   /**
    * Create an input.
    *
@@ -65,20 +61,14 @@ public:
   /** Destructor. Frees the lexer and the parser. */
   virtual ~SygusInput();
 
-  /** Get the language that this Input is reading. */
-  InputLanguage getLanguage() const throw() {
-    return language::input::LANG_SYGUS;
-  }
-
-protected:
-
+ protected:
   /**
    * Parse a command from the input. Returns <code>NULL</code> if
    * there is no command there to parse.
    *
    * @throws ParserException if an error is encountered during parsing.
    */
-  Command* parseCommand();
+  Command* parseCommand() override;
 
   /**
    * Parse an expression from the input. Returns a null
@@ -86,7 +76,7 @@ protected:
    *
    * @throws ParserException if an error is encountered during parsing.
    */
-  Expr parseExpr();
+  Expr parseExpr() override;
 
 };/* class SygusInput */
 

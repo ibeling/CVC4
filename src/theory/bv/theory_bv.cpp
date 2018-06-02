@@ -2,9 +2,9 @@
 /*! \file theory_bv.cpp
  ** \verbatim
  ** Top contributors (to current version):
- **   Liana Hadarean, Andrew Reynolds, Clark Barrett
+ **   Liana Hadarean, Aina Niemetz, Andrew Reynolds
  ** This file is part of the CVC4 project.
- ** Copyright (c) 2009-2017 by the authors listed in the file AUTHORS
+ ** Copyright (c) 2009-2018 by the authors listed in the file AUTHORS
  ** in the top-level source directory) and their institutional affiliations.
  ** All rights reserved.  See the file COPYING in the top-level source
  ** directory for licensing information.\endverbatim
@@ -51,12 +51,10 @@ TheoryBV::TheoryBV(context::Context* c, context::UserContext* u,
     d_sharedTermsSet(c),
     d_subtheories(),
     d_subtheoryMap(),
-    d_statistics(getFullInstanceName()),
+    d_statistics(),
     d_staticLearnCache(),
     d_BVDivByZero(),
     d_BVRemByZero(),
-    d_funcToArgs(),
-    d_funcToSkolem(u),
     d_lemmasAdded(c, false),
     d_conflict(c, false),
     d_invalidateModelCache(c, true),
@@ -64,7 +62,7 @@ TheoryBV::TheoryBV(context::Context* c, context::UserContext* u,
     d_literalsToPropagateIndex(c, 0),
     d_propagatedBy(c),
     d_eagerSolver(NULL),
-    d_abstractionModule(new AbstractionModule(getFullInstanceName())),
+    d_abstractionModule(new AbstractionModule(getStatsPrefix(THEORY_BV))),
     d_isCoreTheory(false),
     d_calledPreregister(false),
     d_needsLastCallCheck(false),
@@ -76,25 +74,27 @@ TheoryBV::TheoryBV(context::Context* c, context::UserContext* u,
   setupExtTheory();
   getExtTheory()->addFunctionKind(kind::BITVECTOR_TO_NAT);
   getExtTheory()->addFunctionKind(kind::INT_TO_BITVECTOR);
-
   if (options::bitblastMode() == theory::bv::BITBLAST_MODE_EAGER) {
     d_eagerSolver = new EagerBitblastSolver(this);
     return;
   }
 
-  if (options::bitvectorEqualitySolver()) {
+  if (options::bitvectorEqualitySolver() && !options::proof())
+  {
     SubtheorySolver* core_solver = new CoreSolver(c, this);
     d_subtheories.push_back(core_solver);
     d_subtheoryMap[SUB_CORE] = core_solver;
   }
 
-  if (options::bitvectorInequalitySolver()) {
+  if (options::bitvectorInequalitySolver() && !options::proof())
+  {
     SubtheorySolver* ineq_solver = new InequalitySolver(c, u, this);
     d_subtheories.push_back(ineq_solver);
     d_subtheoryMap[SUB_INEQUALITY] = ineq_solver;
   }
 
-  if (options::bitvectorAlgebraicSolver()) {
+  if (options::bitvectorAlgebraicSolver() && !options::proof())
+  {
     SubtheorySolver* alg_solver = new AlgebraicSolver(c, this);
     d_subtheories.push_back(alg_solver);
     d_subtheoryMap[SUB_ALGEBRAIC] = alg_solver;
@@ -127,18 +127,19 @@ void TheoryBV::setMasterEqualityEngine(eq::EqualityEngine* eq) {
   }
 }
 
-void TheoryBV::spendResource(unsigned ammount) throw(UnsafeInterruptException) {
-  getOutputChannel().spendResource(ammount);
+void TheoryBV::spendResource(unsigned amount)
+{
+  getOutputChannel().spendResource(amount);
 }
 
-TheoryBV::Statistics::Statistics(const std::string &name):
-  d_avgConflictSize(name + "theory::bv::AvgBVConflictSize"),
-  d_solveSubstitutions(name + "theory::bv::NumberOfSolveSubstitutions", 0),
-  d_solveTimer(name + "theory::bv::solveTimer"),
-  d_numCallsToCheckFullEffort(name + "theory::bv::NumberOfFullCheckCalls", 0),
-  d_numCallsToCheckStandardEffort(name + "theory::bv::NumberOfStandardCheckCalls", 0),
-  d_weightComputationTimer(name + "theory::bv::weightComputationTimer"),
-  d_numMultSlice(name + "theory::bv::NumMultSliceApplied", 0)
+TheoryBV::Statistics::Statistics():
+  d_avgConflictSize("theory::bv::AvgBVConflictSize"),
+  d_solveSubstitutions("theory::bv::NumSolveSubstitutions", 0),
+  d_solveTimer("theory::bv::solveTimer"),
+  d_numCallsToCheckFullEffort("theory::bv::NumFullCheckCalls", 0),
+  d_numCallsToCheckStandardEffort("theory::bv::NumStandardCheckCalls", 0),
+  d_weightComputationTimer("theory::bv::weightComputationTimer"),
+  d_numMultSlice("theory::bv::NumMultSliceApplied", 0)
 {
   smtStatisticsRegistry()->registerStat(&d_avgConflictSize);
   smtStatisticsRegistry()->registerStat(&d_solveSubstitutions);
@@ -188,92 +189,14 @@ Node TheoryBV::getBVDivByZero(Kind k, unsigned width) {
   Unreachable();
 }
 
-
-void TheoryBV::collectFunctionSymbols(TNode term, TNodeSet& seen) {
-  if (seen.find(term) != seen.end())
-    return;
-  if (term.getKind() == kind::APPLY_UF) {
-    TNode func = term.getOperator();
-    storeFunction(func, term);
-  } else if (term.getKind() == kind::SELECT) {
-    TNode func = term[0];
-    storeFunction(func, term);
-  } else if (term.getKind() == kind::STORE) {
-    AlwaysAssert(false, "Cannot use eager bitblasting on QF_ABV formula with stores");
-  }
-  for (unsigned i = 0; i < term.getNumChildren(); ++i) {
-    collectFunctionSymbols(term[i], seen);
-  }
-  seen.insert(term);
-}
-
-void TheoryBV::storeFunction(TNode func, TNode term) {
-  if (d_funcToArgs.find(func) == d_funcToArgs.end()) {
-    d_funcToArgs.insert(make_pair(func, NodeSet()));
-  }
-  NodeSet& set = d_funcToArgs[func];
-  if (set.find(term) == set.end()) {
-    set.insert(term);
-    Node skolem = utils::mkVar(utils::getSize(term));
-    d_funcToSkolem.addSubstitution(term, skolem);
-  }
-}
-
-void TheoryBV::mkAckermanizationAssertions(std::vector<Node>& assertions) {
-  Debug("bv-ackermanize") << "TheoryBV::mkAckermanizationAssertions\n";
-
-  Assert(options::bitblastMode() == theory::bv::BITBLAST_MODE_EAGER);
-  AlwaysAssert(!options::incrementalSolving());
-  TNodeSet seen;
-  for (unsigned i = 0; i < assertions.size(); ++i) {
-    collectFunctionSymbols(assertions[i], seen);
-  }
-
-  FunctionToArgs::const_iterator it = d_funcToArgs.begin();
-  NodeManager* nm = NodeManager::currentNM();
-  for (; it!= d_funcToArgs.end(); ++it) {
-    TNode func = it->first;
-    const NodeSet& args = it->second;
-    NodeSet::const_iterator it1 = args.begin();
-    for ( ; it1 != args.end(); ++it1) {
-      for(NodeSet::const_iterator it2 = it1; it2 != args.end(); ++it2) {
-        TNode args1 = *it1;
-        TNode args2 = *it2;
-        Node args_eq;
-        
-        if (args1.getKind() == kind::APPLY_UF) {
-          AlwaysAssert (args1.getKind() == kind::APPLY_UF &&
-                        args1.getOperator() == func);
-          AlwaysAssert (args2.getKind() == kind::APPLY_UF &&
-                        args2.getOperator() == func);
-          AlwaysAssert (args1.getNumChildren() == args2.getNumChildren());
-
-          std::vector<Node> eqs(args1.getNumChildren());
-
-          for (unsigned i = 0; i < args1.getNumChildren(); ++i) {
-            eqs[i] = nm->mkNode(kind::EQUAL, args1[i], args2[i]);
-          }
-          args_eq = eqs.size() == 1 ? eqs[0] : nm->mkNode(kind::AND, eqs);
-        } else {
-          AlwaysAssert (args1.getKind() == kind::SELECT &&
-                        args1[0] == func);
-          AlwaysAssert (args2.getKind() == kind::SELECT &&
-                        args2[0] == func);
-          AlwaysAssert (args1.getNumChildren() == 2);
-          AlwaysAssert (args2.getNumChildren() == 2);
-          args_eq = nm->mkNode(kind::EQUAL, args1[1], args2[1]);
-        }
-        Node func_eq = nm->mkNode(kind::EQUAL, args1, args2);
-        Node lemma = nm->mkNode(kind::IMPLIES, args_eq, func_eq);
-        assertions.push_back(lemma);
-      }
-    }
-  }
-
-  // replace applications of UF by skolems (FIXME for model building)
-  for(unsigned i = 0; i < assertions.size(); ++i) {
-    assertions[i] = d_funcToSkolem.apply(assertions[i]);
-  }
+void TheoryBV::finishInit()
+{
+  // these kinds are semi-evaluated in getModelValue (applications of this
+  // kind are treated as variables)
+  TheoryModel* tm = d_valuation.getModel();
+  Assert(tm != nullptr);
+  tm->setSemiEvaluatedKind(kind::BITVECTOR_ACKERMANNIZE_UDIV);
+  tm->setSemiEvaluatedKind(kind::BITVECTOR_ACKERMANNIZE_UREM);
 }
 
 Node TheoryBV::expandDefinition(LogicRequest &logicRequest, Node node) {
@@ -297,22 +220,14 @@ Node TheoryBV::expandDefinition(LogicRequest &logicRequest, Node node) {
     }
 
     TNode num = node[0], den = node[1];
-    Node den_eq_0 = nm->mkNode(kind::EQUAL, den, nm->mkConst(BitVector(width, Integer(0))));
+    Node den_eq_0 = nm->mkNode(kind::EQUAL, den, utils::mkZero(width));
     Node divTotalNumDen = nm->mkNode(node.getKind() == kind::BITVECTOR_UDIV ? kind::BITVECTOR_UDIV_TOTAL :
 				     kind::BITVECTOR_UREM_TOTAL, num, den);
-
-    // if (options::bitblastMode() == theory::bv::BITBLAST_MODE_EAGER) {
-    //   // Ackermanize UF if using eager bit-blasting
-    //   Node ackerman_var = nm->mkNode(node.getKind() == kind::BITVECTOR_UDIV ? kind::BITVECTOR_ACKERMANIZE_UDIV : kind::BITVECTOR_ACKERMANIZE_UREM, num);
-    //   node = nm->mkNode(kind::ITE, den_eq_0, ackerman_var, divTotalNumDen);
-    //   return node;
-    // } else {
-      Node divByZero = getBVDivByZero(node.getKind(), width);
-      Node divByZeroNum = nm->mkNode(kind::APPLY_UF, divByZero, num);
-      node = nm->mkNode(kind::ITE, den_eq_0, divByZeroNum, divTotalNumDen);
-      logicRequest.widenLogic(THEORY_UF);
-      return node;
-      //}
+    Node divByZero = getBVDivByZero(node.getKind(), width);
+    Node divByZeroNum = nm->mkNode(kind::APPLY_UF, divByZero, num);
+    node = nm->mkNode(kind::ITE, den_eq_0, divByZeroNum, divTotalNumDen);
+    logicRequest.widenLogic(THEORY_UF);
+    return node;
   }
     break;
 
@@ -364,28 +279,33 @@ void TheoryBV::sendConflict() {
   }
 }
 
-void TheoryBV::checkForLemma(TNode fact) {
-  if (fact.getKind() == kind::EQUAL) {
-    if (fact[0].getKind() == kind::BITVECTOR_UREM_TOTAL) {
+void TheoryBV::checkForLemma(TNode fact)
+{
+  if (fact.getKind() == kind::EQUAL)
+  {
+    NodeManager* nm = NodeManager::currentNM();
+    if (fact[0].getKind() == kind::BITVECTOR_UREM_TOTAL)
+    {
       TNode urem = fact[0];
       TNode result = fact[1];
       TNode divisor = urem[1];
-      Node result_ult_div = mkNode(kind::BITVECTOR_ULT, result, divisor);
-      Node divisor_eq_0 = mkNode(kind::EQUAL,
-                                 divisor,
-                                 mkConst(BitVector(getSize(divisor), 0u)));
-      Node split = utils::mkNode(kind::OR, divisor_eq_0, mkNode(kind::NOT, fact), result_ult_div);
+      Node result_ult_div = nm->mkNode(kind::BITVECTOR_ULT, result, divisor);
+      Node divisor_eq_0 =
+          nm->mkNode(kind::EQUAL, divisor, mkZero(getSize(divisor)));
+      Node split = nm->mkNode(
+          kind::OR, divisor_eq_0, nm->mkNode(kind::NOT, fact), result_ult_div);
       lemma(split);
     }
-    if (fact[1].getKind() == kind::BITVECTOR_UREM_TOTAL) {
+    if (fact[1].getKind() == kind::BITVECTOR_UREM_TOTAL)
+    {
       TNode urem = fact[1];
       TNode result = fact[0];
       TNode divisor = urem[1];
-      Node result_ult_div = mkNode(kind::BITVECTOR_ULT, result, divisor);
-      Node divisor_eq_0 = mkNode(kind::EQUAL,
-                                 divisor,
-                                 mkConst(BitVector(getSize(divisor), 0u)));
-      Node split = utils::mkNode(kind::OR, divisor_eq_0, mkNode(kind::NOT, fact), result_ult_div);
+      Node result_ult_div = nm->mkNode(kind::BITVECTOR_ULT, result, divisor);
+      Node divisor_eq_0 =
+          nm->mkNode(kind::EQUAL, divisor, mkZero(getSize(divisor)));
+      Node split = nm->mkNode(
+          kind::OR, divisor_eq_0, nm->mkNode(kind::NOT, fact), result_ult_div);
       lemma(split);
     }
   }
@@ -432,7 +352,7 @@ void TheoryBV::check(Effort e)
         d_out->conflict(assertions[0]);
         return;
       }
-      Node conflict = NodeManager::currentNM()->mkNode(kind::AND, assertions);
+      Node conflict = utils::mkAnd(assertions);
       d_out->conflict(conflict);
       return;
     }
@@ -506,59 +426,76 @@ void TheoryBV::check(Effort e)
   }
 }
 
-bool TheoryBV::doExtfInferences( std::vector< Node >& terms ) {
+bool TheoryBV::doExtfInferences(std::vector<Node>& terms)
+{
+  NodeManager* nm = NodeManager::currentNM();
   bool sentLemma = false;
-  eq::EqualityEngine * ee = getEqualityEngine();    
-  std::map< Node, Node > op_map;
-  for( unsigned j=0; j<terms.size(); j++ ){
+  eq::EqualityEngine* ee = getEqualityEngine();
+  std::map<Node, Node> op_map;
+  for (unsigned j = 0; j < terms.size(); j++)
+  {
     TNode n = terms[j];
-    Assert (n.getKind() == kind::BITVECTOR_TO_NAT
-            || n.getKind() == kind::INT_TO_BITVECTOR );
-    if( n.getKind()==kind::BITVECTOR_TO_NAT ){
-      //range lemmas
-      if( d_extf_range_infer.find( n )==d_extf_range_infer.end() ){
-        d_extf_range_infer.insert( n );
+    Assert(n.getKind() == kind::BITVECTOR_TO_NAT
+           || n.getKind() == kind::INT_TO_BITVECTOR);
+    if (n.getKind() == kind::BITVECTOR_TO_NAT)
+    {
+      // range lemmas
+      if (d_extf_range_infer.find(n) == d_extf_range_infer.end())
+      {
+        d_extf_range_infer.insert(n);
         unsigned bvs = n[0].getType().getBitVectorSize();
-        Node min = NodeManager::currentNM()->mkConst( Rational( 0 ) );
-        Node max = NodeManager::currentNM()->mkConst( Rational( Integer(1).multiplyByPow2(bvs) ) );
-        Node lem = NodeManager::currentNM()->mkNode( kind::AND, NodeManager::currentNM()->mkNode( kind::GEQ, n, min ), NodeManager::currentNM()->mkNode( kind::LT, n, max ) );
-        Trace("bv-extf-lemma") << "BV extf lemma (range) : " << lem << std::endl;
-        d_out->lemma( lem );
+        Node min = nm->mkConst(Rational(0));
+        Node max = nm->mkConst(Rational(Integer(1).multiplyByPow2(bvs)));
+        Node lem = nm->mkNode(kind::AND,
+                              nm->mkNode(kind::GEQ, n, min),
+                              nm->mkNode(kind::LT, n, max));
+        Trace("bv-extf-lemma")
+            << "BV extf lemma (range) : " << lem << std::endl;
+        d_out->lemma(lem);
         sentLemma = true;
       }
     }
-    Node r = ( ee && ee->hasTerm( n[0] ) ) ? ee->getRepresentative( n[0] ) : n[0];
+    Node r = (ee && ee->hasTerm(n[0])) ? ee->getRepresentative(n[0]) : n[0];
     op_map[r] = n;
   }
-  for( unsigned j=0; j<terms.size(); j++ ){
+  for (unsigned j = 0; j < terms.size(); j++)
+  {
     TNode n = terms[j];
-    Node r = ( ee && ee->hasTerm( n[0] ) ) ? ee->getRepresentative( n ) : n;
-    std::map< Node, Node >::iterator it = op_map.find( r );
-    if( it!=op_map.end() ){
+    Node r = (ee && ee->hasTerm(n[0])) ? ee->getRepresentative(n) : n;
+    std::map<Node, Node>::iterator it = op_map.find(r);
+    if (it != op_map.end())
+    {
       Node parent = it->second;
-      //Node cterm = parent[0]==n ? parent : NodeManager::currentNM()->mkNode( parent.getOperator(), n );
-      Node cterm = parent[0].eqNode( n );
-      Trace("bv-extf-lemma-debug") << "BV extf collapse based on : " << cterm << std::endl;
-      if( d_extf_collapse_infer.find( cterm )==d_extf_collapse_infer.end() ){
-        d_extf_collapse_infer.insert( cterm );
-      
+      // Node cterm = parent[0]==n ? parent : nm->mkNode( parent.getOperator(),
+      // n );
+      Node cterm = parent[0].eqNode(n);
+      Trace("bv-extf-lemma-debug")
+          << "BV extf collapse based on : " << cterm << std::endl;
+      if (d_extf_collapse_infer.find(cterm) == d_extf_collapse_infer.end())
+      {
+        d_extf_collapse_infer.insert(cterm);
+
         Node t = n[0];
-        if( n.getKind()==kind::INT_TO_BITVECTOR ){
-          Assert( t.getType().isInteger() );
-          //congruent modulo 2^( bv width )
+        if (n.getKind() == kind::INT_TO_BITVECTOR)
+        {
+          Assert(t.getType().isInteger());
+          // congruent modulo 2^( bv width )
           unsigned bvs = n.getType().getBitVectorSize();
-          Node coeff = NodeManager::currentNM()->mkConst( Rational( Integer(1).multiplyByPow2(bvs) ) );
-          Node k = NodeManager::currentNM()->mkSkolem( "int_bv_cong", t.getType(), "for int2bv/bv2nat congruence" );
-          t = NodeManager::currentNM()->mkNode( kind::PLUS, t, NodeManager::currentNM()->mkNode( kind::MULT, coeff, k ) );
+          Node coeff = nm->mkConst(Rational(Integer(1).multiplyByPow2(bvs)));
+          Node k = nm->mkSkolem(
+              "int_bv_cong", t.getType(), "for int2bv/bv2nat congruence");
+          t = nm->mkNode(kind::PLUS, t, nm->mkNode(kind::MULT, coeff, k));
         }
-        Node lem = parent.eqNode( t );
-        
-        if( parent[0]!=n ){
-          Assert( ee->areEqual( parent[0], n ) );
-          lem = NodeManager::currentNM()->mkNode( kind::IMPLIES, parent[0].eqNode( n ), lem );
+        Node lem = parent.eqNode(t);
+
+        if (parent[0] != n)
+        {
+          Assert(ee->areEqual(parent[0], n));
+          lem = nm->mkNode(kind::IMPLIES, parent[0].eqNode(n), lem);
         }
-        Trace("bv-extf-lemma") << "BV extf lemma (collapse) : " << lem << std::endl;
-        d_out->lemma( lem );
+        Trace("bv-extf-lemma")
+            << "BV extf lemma (collapse) : " << lem << std::endl;
+        d_out->lemma(lem);
         sentLemma = true;
       }
     }
@@ -578,18 +515,21 @@ bool TheoryBV::doExtfReductions( std::vector< Node >& terms ) {
 bool TheoryBV::needsCheckLastEffort() {
   return d_needsLastCallCheck;
 }
-
-void TheoryBV::collectModelInfo( TheoryModel* m ){
+bool TheoryBV::collectModelInfo(TheoryModel* m)
+{
   Assert(!inConflict());
   if (options::bitblastMode() == theory::bv::BITBLAST_MODE_EAGER) {
-    d_eagerSolver->collectModelInfo(m, true);
+    if (!d_eagerSolver->collectModelInfo(m, true))
+    {
+      return false;
+    }
   }
   for (unsigned i = 0; i < d_subtheories.size(); ++i) {
     if (d_subtheories[i]->isComplete()) {
-      d_subtheories[i]->collectModelInfo(m, true);
-      return;
+      return d_subtheories[i]->collectModelInfo(m, true);
     }
   }
+  return true;
 }
 
 Node TheoryBV::getModelValue(TNode var) {
@@ -665,33 +605,44 @@ bool TheoryBV::getCurrentSubstitution( int effort, std::vector< Node >& vars, st
   return false;
 }
 
-int TheoryBV::getReduction( int effort, Node n, Node& nr ) {
+int TheoryBV::getReduction(int effort, Node n, Node& nr)
+{
   Trace("bv-ext") << "TheoryBV::checkExt : non-reduced : " << n << std::endl;
-  if( n.getKind()==kind::BITVECTOR_TO_NAT ){
-    //taken from rewrite code
+  NodeManager* const nm = NodeManager::currentNM();
+  if (n.getKind() == kind::BITVECTOR_TO_NAT)
+  {
+    // taken from rewrite code
     const unsigned size = utils::getSize(n[0]);
-    NodeManager* const nm = NodeManager::currentNM();
     const Node z = nm->mkConst(Rational(0));
-    const Node bvone = nm->mkConst(BitVector(1u, 1u));
+    const Node bvone = utils::mkOne(1);
     NodeBuilder<> result(kind::PLUS);
     Integer i = 1;
-    for(unsigned bit = 0; bit < size; ++bit, i *= 2) {
-      Node cond = nm->mkNode(kind::EQUAL, nm->mkNode(nm->mkConst(BitVectorExtract(bit, bit)), n[0]), bvone);
+    for (unsigned bit = 0; bit < size; ++bit, i *= 2)
+    {
+      Node cond =
+          nm->mkNode(kind::EQUAL,
+                     nm->mkNode(nm->mkConst(BitVectorExtract(bit, bit)), n[0]),
+                     bvone);
       result << nm->mkNode(kind::ITE, cond, nm->mkConst(Rational(i)), z);
     }
     nr = Node(result);
     return -1;
-  }else if( n.getKind()==kind::INT_TO_BITVECTOR ){
-    //taken from rewrite code
+  }
+  else if (n.getKind() == kind::INT_TO_BITVECTOR)
+  {
+    // taken from rewrite code
     const unsigned size = n.getOperator().getConst<IntToBitVector>().size;
-    NodeManager* const nm = NodeManager::currentNM();
-    const Node bvzero = nm->mkConst(BitVector(1u, 0u));
-    const Node bvone = nm->mkConst(BitVector(1u, 1u));
+    const Node bvzero = utils::mkZero(1);
+    const Node bvone = utils::mkOne(1);
     std::vector<Node> v;
     Integer i = 2;
-    while(v.size() < size) {
-      Node cond = nm->mkNode(kind::GEQ, nm->mkNode(kind::INTS_MODULUS_TOTAL, n[0], nm->mkConst(Rational(i))), nm->mkConst(Rational(i, 2)));
-      cond = Rewriter::rewrite( cond );
+    while (v.size() < size)
+    {
+      Node cond = nm->mkNode(
+          kind::GEQ,
+          nm->mkNode(kind::INTS_MODULUS_TOTAL, n[0], nm->mkConst(Rational(i))),
+          nm->mkConst(Rational(i, 2)));
+      cond = Rewriter::rewrite(cond);
       v.push_back(nm->mkNode(kind::ITE, cond, bvone, bvzero));
       i *= 2;
     }
@@ -702,26 +653,34 @@ int TheoryBV::getReduction( int effort, Node n, Node& nr ) {
   }
   return 0;
 }
-  
-Theory::PPAssertStatus TheoryBV::ppAssert(TNode in, SubstitutionMap& outSubstitutions) {
-  switch(in.getKind()) {
-  case kind::EQUAL:
+
+Theory::PPAssertStatus TheoryBV::ppAssert(TNode in,
+                                          SubstitutionMap& outSubstitutions)
+{
+  switch (in.getKind())
+  {
+    case kind::EQUAL:
     {
-      if (in[0].isVar() && !in[1].hasSubterm(in[0])) {
+      if (in[0].isVar() && !in[1].hasSubterm(in[0]))
+      {
         ++(d_statistics.d_solveSubstitutions);
         outSubstitutions.addSubstitution(in[0], in[1]);
         return PP_ASSERT_STATUS_SOLVED;
       }
-      if (in[1].isVar() && !in[0].hasSubterm(in[1])) {
+      if (in[1].isVar() && !in[0].hasSubterm(in[1]))
+      {
         ++(d_statistics.d_solveSubstitutions);
         outSubstitutions.addSubstitution(in[1], in[0]);
         return PP_ASSERT_STATUS_SOLVED;
       }
       Node node = Rewriter::rewrite(in);
-      if ((node[0].getKind() == kind::BITVECTOR_EXTRACT && node[1].isConst()) ||
-          (node[1].getKind() == kind::BITVECTOR_EXTRACT && node[0].isConst())) {
+      if ((node[0].getKind() == kind::BITVECTOR_EXTRACT && node[1].isConst())
+          || (node[1].getKind() == kind::BITVECTOR_EXTRACT
+              && node[0].isConst()))
+      {
         Node extract = node[0].isConst() ? node[1] : node[0];
-        if (extract[0].getKind() == kind::VARIABLE) {
+        if (extract[0].getKind() == kind::VARIABLE)
+        {
           Node c = node[0].isConst() ? node[0] : node[1];
 
           unsigned high = utils::getExtractHigh(extract);
@@ -729,18 +688,23 @@ Theory::PPAssertStatus TheoryBV::ppAssert(TNode in, SubstitutionMap& outSubstitu
           unsigned var_bitwidth = utils::getSize(extract[0]);
           std::vector<Node> children;
 
-          if (low == 0) {
-            Assert (high != var_bitwidth - 1);
+          if (low == 0)
+          {
+            Assert(high != var_bitwidth - 1);
             unsigned skolem_size = var_bitwidth - high - 1;
             Node skolem = utils::mkVar(skolem_size);
             children.push_back(skolem);
             children.push_back(c);
-          } else if (high == var_bitwidth - 1) {
+          }
+          else if (high == var_bitwidth - 1)
+          {
             unsigned skolem_size = low;
             Node skolem = utils::mkVar(skolem_size);
             children.push_back(c);
             children.push_back(skolem);
-          } else {
+          }
+          else
+          {
             unsigned skolem1_size = low;
             unsigned skolem2_size = var_bitwidth - high - 1;
             Node skolem1 = utils::mkVar(skolem1_size);
@@ -749,22 +713,22 @@ Theory::PPAssertStatus TheoryBV::ppAssert(TNode in, SubstitutionMap& outSubstitu
             children.push_back(c);
             children.push_back(skolem1);
           }
-          Node concat = utils::mkNode(kind::BITVECTOR_CONCAT, children);
-          Assert (utils::getSize(concat) == utils::getSize(extract[0]));
+          Node concat = utils::mkConcat(children);
+          Assert(utils::getSize(concat) == utils::getSize(extract[0]));
           outSubstitutions.addSubstitution(extract[0], concat);
           return PP_ASSERT_STATUS_SOLVED;
         }
       }
     }
     break;
-  case kind::BITVECTOR_ULT:
-  case kind::BITVECTOR_SLT:
-  case kind::BITVECTOR_ULE:
-  case kind::BITVECTOR_SLE:
+    case kind::BITVECTOR_ULT:
+    case kind::BITVECTOR_SLT:
+    case kind::BITVECTOR_ULE:
+    case kind::BITVECTOR_SLE:
 
-  default:
-    // TODO other predicates
-    break;
+    default:
+      // TODO other predicates
+      break;
   }
   return PP_ASSERT_STATUS_UNSOLVED;
 }
@@ -793,26 +757,37 @@ Node TheoryBV::ppRewrite(TNode t)
       RewriteRule<ConcatToMult>::run<true>(res[1]);
     Node factor = mult[0];
     Node sum =  RewriteRule<ConcatToMult>::applies(res[0])? res[1] : res[0];
-    Node new_eq =utils::mkNode(kind::EQUAL, sum, mult);
+    Node new_eq = NodeManager::currentNM()->mkNode(kind::EQUAL, sum, mult);
     Node rewr_eq = RewriteRule<SolveEq>::run<true>(new_eq);
     if (rewr_eq[0].isVar() || rewr_eq[1].isVar()){
       res = Rewriter::rewrite(rewr_eq);
     } else {
       res = t;
     }
+  } else if (RewriteRule<SignExtendEqConst>::applies(t)) {
+    res = RewriteRule<SignExtendEqConst>::run<false>(t);
+  } else if (RewriteRule<ZeroExtendEqConst>::applies(t)) {
+    res = RewriteRule<ZeroExtendEqConst>::run<false>(t);
+  }
+  else if (RewriteRule<NormalizeEqPlusNeg>::applies(t))
+  {
+    res = RewriteRule<NormalizeEqPlusNeg>::run<false>(t);
   }
 
-
   // if(t.getKind() == kind::EQUAL &&
-  //    ((t[0].getKind() == kind::BITVECTOR_MULT && t[1].getKind() == kind::BITVECTOR_PLUS) ||
-  //     (t[1].getKind() == kind::BITVECTOR_MULT && t[0].getKind() == kind::BITVECTOR_PLUS))) {
+  //    ((t[0].getKind() == kind::BITVECTOR_MULT && t[1].getKind() ==
+  //    kind::BITVECTOR_PLUS) ||
+  //     (t[1].getKind() == kind::BITVECTOR_MULT && t[0].getKind() ==
+  //     kind::BITVECTOR_PLUS))) {
   //   // if we have an equality between a multiplication and addition
   //   // try to express multiplication in terms of addition
   //   Node mult = t[0].getKind() == kind::BITVECTOR_MULT? t[0] : t[1];
   //   Node add = t[0].getKind() == kind::BITVECTOR_PLUS? t[0] : t[1];
   //   if (RewriteRule<MultSlice>::applies(mult)) {
   //     Node new_mult = RewriteRule<MultSlice>::run<false>(mult);
-  //     Node new_eq = Rewriter::rewrite(utils::mkNode(kind::EQUAL, new_mult, add));
+  //     Node new_eq =
+  //     Rewriter::rewrite(NodeManager::currentNM()->mkNode(kind::EQUAL,
+  //     new_mult, add));
 
   //     // the simplification can cause the formula to blow up
   //     // only apply if formula reduced
@@ -979,7 +954,8 @@ void TheoryBV::ppStaticLearn(TNode in, NodeBuilder<>& learned) {
           Node c_eq_0 = c.eqNode(zero);
           Node b_eq_c = b.eqNode(c);
 
-          Node dis = utils::mkNode(kind::OR, b_eq_0, c_eq_0, b_eq_c);
+          Node dis = NodeManager::currentNM()->mkNode(
+              kind::OR, b_eq_0, c_eq_0, b_eq_c);
           Node imp = in.impNode(dis);
           learned << imp;
         }
@@ -1015,15 +991,19 @@ void TheoryBV::setProofLog( BitVectorProof * bvp ) {
   }
 }
 
-void TheoryBV::setConflict(Node conflict) {
-  if (options::bvAbstraction()) {
+void TheoryBV::setConflict(Node conflict)
+{
+  if (options::bvAbstraction())
+  {
+    NodeManager* const nm = NodeManager::currentNM();
     Node new_conflict = d_abstractionModule->simplifyConflict(conflict);
 
     std::vector<Node> lemmas;
     lemmas.push_back(new_conflict);
     d_abstractionModule->generalizeConflict(new_conflict, lemmas);
-    for (unsigned i = 0; i < lemmas.size(); ++i) {
-      lemma(utils::mkNode(kind::NOT, lemmas[i]));
+    for (unsigned i = 0; i < lemmas.size(); ++i)
+    {
+      lemma(nm->mkNode(kind::NOT, lemmas[i]));
     }
   }
   d_conflict = true;

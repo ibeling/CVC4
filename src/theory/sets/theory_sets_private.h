@@ -158,7 +158,24 @@ private:
 private: //for universe set
   NodeBoolMap d_var_elim;
   void lastCallEffortCheck();
-public:
+
+ private:
+  /** type constraint skolems
+   *
+   * The sets theory solver outputs equality lemmas of the form:
+   *   n = d_tc_skolem[n][tn]
+   * where the type of d_tc_skolem[n][tn] is tn, and the type
+   * of n is not a subtype of tn. This is required to handle benchmarks like
+   *   test/regress/regress0/sets/sets-of-sets-subtypes.smt2
+   * where for s : (Set Int) and t : (Set Real), we have that
+   *   ( s = t ^ y in t ) implies ( exists k : Int. y = k )
+   * The type constraint Skolem for (y, Int) is the skolemization of k above.
+   */
+  std::map<Node, std::map<TypeNode, Node> > d_tc_skolem;
+  /** get type constraint skolem for n and tn */
+  Node getTypeConstraintSkolem(Node n, TypeNode tn);
+
+ public:
 
   /**
    * Constructs a new instance of TheorySetsPrivate w.r.t. the provided
@@ -178,7 +195,7 @@ public:
   
   bool needsCheckLastEffort();
 
-  void collectModelInfo(TheoryModel* m);
+  bool collectModelInfo(TheoryModel* m);
 
   void computeCareGraph();
 
@@ -253,14 +270,17 @@ private:
 
   public:
     NotifyClass(TheorySetsPrivate& theory): d_theory(theory) {}
-    bool eqNotifyTriggerEquality(TNode equality, bool value);
-    bool eqNotifyTriggerPredicate(TNode predicate, bool value);
-    bool eqNotifyTriggerTermEquality(TheoryId tag, TNode t1, TNode t2, bool value);
-    void eqNotifyConstantTermMerge(TNode t1, TNode t2);
-    void eqNotifyNewClass(TNode t);
-    void eqNotifyPreMerge(TNode t1, TNode t2);
-    void eqNotifyPostMerge(TNode t1, TNode t2);
-    void eqNotifyDisequal(TNode t1, TNode t2, TNode reason);
+    bool eqNotifyTriggerEquality(TNode equality, bool value) override;
+    bool eqNotifyTriggerPredicate(TNode predicate, bool value) override;
+    bool eqNotifyTriggerTermEquality(TheoryId tag,
+                                     TNode t1,
+                                     TNode t2,
+                                     bool value) override;
+    void eqNotifyConstantTermMerge(TNode t1, TNode t2) override;
+    void eqNotifyNewClass(TNode t) override;
+    void eqNotifyPreMerge(TNode t1, TNode t2) override;
+    void eqNotifyPostMerge(TNode t1, TNode t2) override;
+    void eqNotifyDisequal(TNode t1, TNode t2, TNode reason) override;
   } d_notify;
 
   /** Equality engine */

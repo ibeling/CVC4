@@ -38,8 +38,6 @@
 // Forward declarations.
 namespace CVC4 {
 class CnfProof;
-template <class Solver>
-class ProofProxy;
 } /* namespace CVC4 */
 
 namespace CVC4 {
@@ -192,7 +190,6 @@ class TSatProof {
    */
   void storeUnitResolution(typename Solver::TLit lit);
 
-  ProofProxy<Solver>* getProxy() { return d_proxy; }
   /**
    * Constructs the SAT proof for the given clause,
    * by collecting the needed clauses in the d_seen
@@ -301,7 +298,7 @@ class TSatProof {
   void addToCnfProof(ClauseId id);
 
   // Internal data.
-  typename Solver::Solver* d_solver;
+  Solver* d_solver;
   context::Context* d_context;
   CnfProof* d_cnfProof;
 
@@ -341,8 +338,6 @@ class TSatProof {
 
   const ClauseId d_emptyClauseId;
   const ClauseId d_nullId;
-  // proxy class to break circular dependencies
-  ProofProxy<Solver>* d_proxy;
 
   // temporary map for updating CRefs
   ClauseIdMap d_temp_clauseId;
@@ -379,16 +374,6 @@ class TSatProof {
   Statistics d_statistics;
 }; /* class TSatProof */
 
-template <class S>
-class ProofProxy {
- private:
-  TSatProof<S>* d_proof;
-
- public:
-  ProofProxy(TSatProof<S>* pf);
-  void updateCRef(typename S::TCRef oldref, typename S::TCRef newref);
-}; /* class ProofProxy */
-
 template <class SatSolver>
 class LFSCSatProof : public TSatProof<SatSolver> {
  private:
@@ -396,13 +381,15 @@ class LFSCSatProof : public TSatProof<SatSolver> {
   LFSCSatProof(SatSolver* solver, context::Context* context,
                const std::string& name, bool checkRes = false)
     : TSatProof<SatSolver>(solver, context, name, checkRes) {}
-  virtual void printResolution(ClauseId id, std::ostream& out,
-                               std::ostream& paren);
-  virtual void printResolutions(std::ostream& out, std::ostream& paren);
-  virtual void printResolutionEmptyClause(std::ostream& out,
-                                          std::ostream& paren);
-  virtual void printAssumptionsResolution(ClauseId id, std::ostream& out,
-                                          std::ostream& paren);
+  void printResolution(ClauseId id,
+                       std::ostream& out,
+                       std::ostream& paren) override;
+  void printResolutions(std::ostream& out, std::ostream& paren) override;
+  void printResolutionEmptyClause(std::ostream& out,
+                                  std::ostream& paren) override;
+  void printAssumptionsResolution(ClauseId id,
+                                  std::ostream& out,
+                                  std::ostream& paren) override;
 }; /* class LFSCSatProof */
 
 template <class Solver>

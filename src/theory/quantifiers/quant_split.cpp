@@ -31,8 +31,8 @@ QuantifiersModule( qe ), d_added_split( qe->getUserContext() ){
 
 }
 
-/** pre register quantifier */
-void QuantDSplit::preRegisterQuantifier( Node q ) {
+void QuantDSplit::checkOwnership(Node q)
+{
   int max_index = -1;
   int max_score = -1;
   if( q.getNumChildren()==3 ){
@@ -83,9 +83,11 @@ bool QuantDSplit::checkCompleteFor( Node q ) {
 }
 
 /* Call during quantifier engine's check */
-void QuantDSplit::check( Theory::Effort e, unsigned quant_e ) {
+void QuantDSplit::check(Theory::Effort e, QEffort quant_e)
+{
   //add lemmas ASAP (they are a reduction)
-  if( quant_e==QuantifiersEngine::QEFFORT_CONFLICT ){
+  if (quant_e == QEFFORT_CONFLICT)
+  {
     std::vector< Node > lemmas;
     for(std::map< Node, int >::iterator it = d_quant_to_reduce.begin(); it != d_quant_to_reduce.end(); ++it) {
       Node q = it->first;

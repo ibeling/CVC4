@@ -26,10 +26,10 @@
 
 #include "expr/expr.h"
 #include "proof/clause_id.h"
-#include "prop/sat_solver_types.h"
-#include "util/proof.h"
 #include "proof/proof_utils.h"
-
+#include "prop/sat_solver_types.h"
+#include "theory/uf/equality_engine.h"
+#include "util/proof.h"
 namespace CVC4 {
 
 namespace theory {
@@ -163,23 +163,32 @@ public:
   LFSCTheoryProofEngine()
     : TheoryProofEngine() {}
 
-  void printTheoryTerm(Expr term, std::ostream& os, const ProofLetMap& map);
+  void printTheoryTerm(Expr term,
+                       std::ostream& os,
+                       const ProofLetMap& map) override;
 
-  void registerTermsFromAssertions();
+  void registerTermsFromAssertions() override;
   void printSortDeclarations(std::ostream& os, std::ostream& paren);
   void printTermDeclarations(std::ostream& os, std::ostream& paren);
-  virtual void printCoreTerm(Expr term, std::ostream& os, const ProofLetMap& map);
-  virtual void printLetTerm(Expr term, std::ostream& os);
-  virtual void printBoundTerm(Expr term, std::ostream& os, const ProofLetMap& map);
-  virtual void printAssertions(std::ostream& os, std::ostream& paren);
-  virtual void printLemmaRewrites(NodePairSet& rewrites, std::ostream& os, std::ostream& paren);
-  virtual void printDeferredDeclarations(std::ostream& os, std::ostream& paren);
-  virtual void printAliasingDeclarations(std::ostream& os, std::ostream& paren, const ProofLetMap &globalLetMap);
-  virtual void printTheoryLemmas(const IdToSatClause& lemmas,
-                                 std::ostream& os,
+  void printCoreTerm(Expr term, std::ostream& os, const ProofLetMap& map);
+  void printLetTerm(Expr term, std::ostream& os) override;
+  void printBoundTerm(Expr term,
+                      std::ostream& os,
+                      const ProofLetMap& map) override;
+  void printAssertions(std::ostream& os, std::ostream& paren) override;
+  void printLemmaRewrites(NodePairSet& rewrites,
+                          std::ostream& os,
+                          std::ostream& paren);
+  void printDeferredDeclarations(std::ostream& os,
+                                 std::ostream& paren) override;
+  void printAliasingDeclarations(std::ostream& os,
                                  std::ostream& paren,
-                                 ProofLetMap& map);
-  virtual void printSort(Type type, std::ostream& os);
+                                 const ProofLetMap& globalLetMap) override;
+  void printTheoryLemmas(const IdToSatClause& lemmas,
+                         std::ostream& os,
+                         std::ostream& paren,
+                         ProofLetMap& map) override;
+  void printSort(Type type, std::ostream& os) override;
 
   void performExtraRegistrations();
 
@@ -198,7 +207,9 @@ protected:
   // Pointer to the theory for this proof
   theory::Theory* d_theory;
   TheoryProofEngine* d_proofEngine;
-public:
+  virtual theory::TheoryId getTheoryId() = 0;
+
+ public:
   TheoryProof(theory::Theory* th, TheoryProofEngine* proofEngine)
     : d_theory(th)
     , d_proofEngine(proofEngine)
@@ -229,6 +240,54 @@ public:
   void printSort(Type type, std::ostream& os) {
     d_proofEngine->printSort(type, os);
   }
+
+  // congrence matching term helper
+  bool match(TNode n1, TNode n2);
+
+  /**
+   * Helper function for ProofUF::toStreamRecLFSC and
+   * ProofArray::toStreamRecLFSC
+   * Inputs:
+   *    - pf: equality engine proof
+   *    - map: A map for the let-expressions in the proof
+   *    - subTrans: main transitivity proof part
+   *    - pPrettyPrinter: optional pretty printer for sub-proofs
+   * returns:
+   *    - the index of the contradicting node in pf.
+   *    */
+  int assertAndPrint(
+      const theory::eq::EqProof& pf,
+      const ProofLetMap& map,
+      std::shared_ptr<theory::eq::EqProof> subTrans,
+      theory::eq::EqProof::PrettyPrinter* pPrettyPrinter = nullptr);
+
+  /**
+   * Helper function for ProofUF::toStreamRecLFSC and
+   * ProofArray::toStreamRecLFSC
+   * Inputs:
+   *    - evenLengthSequence: true iff the length of the sequence
+   *                          of the identical equalities is even.
+   *    - sequenceOver: have we reached the last equality of this sequence?
+   *    - pf: equality engine proof
+   *    - map: A map for the let-expressions in the proof
+   *    - subproofStr: current stringstream content
+   *    - outStream: output stream to which the proof is printed
+   *    - n: transitivity sub-proof
+   *    - nodeAfterEqualitySequence: The node after the identical sequence.
+   * Returns:
+   *    A pair of nodes, that are the updated nodes n and nodeAfterEqualitySequence
+   *
+   */
+  std::pair<Node, Node> identicalEqualitiesPrinterHelper(
+      bool evenLengthSequence,
+      bool sequenceOver,
+      const theory::eq::EqProof& pf,
+      const ProofLetMap& map,
+      const std::string subproofStr,
+      std::stringstream* outStream,
+      Node n,
+      Node nodeAfterEqualitySequence);
+
   /**
    * Print the proof representation of the given type that belongs to THIS theory.
    *
@@ -304,19 +363,12 @@ public:
 class BooleanProof : public TheoryProof {
 protected:
   ExprSet d_declarations; // all the boolean variables
-public:
+  theory::TheoryId getTheoryId() override;
+
+ public:
   BooleanProof(TheoryProofEngine* proofEngine);
 
-  virtual void registerTerm(Expr term);
-
-  virtual void printOwnedTerm(Expr term, std::ostream& os, const ProofLetMap& map) = 0;
-
-  virtual void printOwnedSort(Type type, std::ostream& os) = 0;
-  virtual void printTheoryLemmaProof(std::vector<Expr>& lemma, std::ostream& os, std::ostream& paren, const ProofLetMap& map) = 0;
-  virtual void printSortDeclarations(std::ostream& os, std::ostream& paren) = 0;
-  virtual void printTermDeclarations(std::ostream& os, std::ostream& paren) = 0;
-  virtual void printDeferredDeclarations(std::ostream& os, std::ostream& paren) = 0;
-  virtual void printAliasingDeclarations(std::ostream& os, std::ostream& paren, const ProofLetMap &globalLetMap) = 0;
+  void registerTerm(Expr term) override;
 };
 
 class LFSCBooleanProof : public BooleanProof {
@@ -324,16 +376,27 @@ public:
   LFSCBooleanProof(TheoryProofEngine* proofEngine)
     : BooleanProof(proofEngine)
   {}
-  virtual void printOwnedTerm(Expr term, std::ostream& os, const ProofLetMap& map);
-  virtual void printOwnedSort(Type type, std::ostream& os);
-  virtual void printTheoryLemmaProof(std::vector<Expr>& lemma, std::ostream& os, std::ostream& paren, const ProofLetMap& map);
-  virtual void printSortDeclarations(std::ostream& os, std::ostream& paren);
-  virtual void printTermDeclarations(std::ostream& os, std::ostream& paren);
-  virtual void printDeferredDeclarations(std::ostream& os, std::ostream& paren);
-  virtual void printAliasingDeclarations(std::ostream& os, std::ostream& paren, const ProofLetMap &globalLetMap);
+  void printOwnedTerm(Expr term,
+                      std::ostream& os,
+                      const ProofLetMap& map) override;
+  void printOwnedSort(Type type, std::ostream& os) override;
+  void printTheoryLemmaProof(std::vector<Expr>& lemma,
+                             std::ostream& os,
+                             std::ostream& paren,
+                             const ProofLetMap& map) override;
+  void printSortDeclarations(std::ostream& os, std::ostream& paren) override;
+  void printTermDeclarations(std::ostream& os, std::ostream& paren) override;
+  void printDeferredDeclarations(std::ostream& os,
+                                 std::ostream& paren) override;
+  void printAliasingDeclarations(std::ostream& os,
+                                 std::ostream& paren,
+                                 const ProofLetMap& globalLetMap) override;
 
-  bool printsAsBool(const Node &n);
-  void printConstantDisequalityProof(std::ostream& os, Expr c1, Expr c2, const ProofLetMap &globalLetMap);
+  bool printsAsBool(const Node& n) override;
+  void printConstantDisequalityProof(std::ostream& os,
+                                     Expr c1,
+                                     Expr c2,
+                                     const ProofLetMap& globalLetMap) override;
 };
 
 } /* CVC4 namespace */

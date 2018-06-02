@@ -91,7 +91,8 @@ Solver::Solver(CVC4::context::Context* c) :
 
     // Parameters (user settable):
     //
-    c(c)
+    d_notify(nullptr)
+  , c(c)
   , verbosity        (0)
   , var_decay        (opt_var_decay)
   , clause_decay     (opt_clause_decay)
@@ -674,7 +675,10 @@ void Solver::analyzeFinal(Lit p, vec<Lit>& out_conflict)
             if (reason(x) == CRef_Undef) {
               assert(marker[x] == 2);
               assert(level(x) > 0);
-              out_conflict.push(~trail[i]);
+              if (~trail[i] != p)
+              {
+                out_conflict.push(~trail[i]);
+              }
             } else {
               Clause& c = ca[reason(x)];
               if(d_bvp){
@@ -712,9 +716,10 @@ void Solver::uncheckedEnqueue(Lit p, CRef from)
     vardata[var(p)] = mkVarData(from, decisionLevel());
     trail.push_(p);
     if (decisionLevel() <= assumptions.size() && marker[var(p)] == 1) {
-      if (notify) {
-        Debug("bvminisat::explain") << OUTPUT_TAG << "propagating " << p << std::endl;
-        notify->notify(p);
+      if (d_notify) {
+        Debug("bvminisat::explain")
+            << OUTPUT_TAG << "propagating " << p << std::endl;
+        d_notify->notify(p);
       }
     }
 }
@@ -1407,7 +1412,7 @@ void Solver::relocAll(ClauseAllocator& to)
             // printf(" >>> RELOCING: %s%d\n", sign(p)?"-":"", var(p)+1);
             vec<Watcher>& ws = watches[p];
             for (int j = 0; j < ws.size(); j++)
-              ca.reloc(ws[j].cref, to, d_bvp ?  d_bvp->getSatProof()->getProxy() : NULL);
+              ca.reloc(ws[j].cref, to, d_bvp ? d_bvp->getSatProof() : NULL);
         }
 
     // All reasons:
@@ -1416,19 +1421,19 @@ void Solver::relocAll(ClauseAllocator& to)
         Var v = var(trail[i]);
 
         if (reason(v) != CRef_Undef && (ca[reason(v)].reloced() || locked(ca[reason(v)])))
-            ca.reloc(vardata[v].reason, to, d_bvp ?  d_bvp->getSatProof()->getProxy() : NULL);
+          ca.reloc(vardata[v].reason, to, d_bvp ? d_bvp->getSatProof() : NULL);
     }
 
     // All learnt:
     //
     for (int i = 0; i < learnts.size(); i++)
-        ca.reloc(learnts[i], to, d_bvp ?  d_bvp->getSatProof()->getProxy() : NULL);
+      ca.reloc(learnts[i], to, d_bvp ? d_bvp->getSatProof() : NULL);
 
     // All original:
     //
     for (int i = 0; i < clauses.size(); i++)
-        ca.reloc(clauses[i], to, d_bvp ?  d_bvp->getSatProof()->getProxy() : NULL);
-	
+      ca.reloc(clauses[i], to, d_bvp ? d_bvp->getSatProof() : NULL);
+
     if(d_bvp){ d_bvp->getSatProof()->finishUpdateCRef(); }
 }
 
@@ -1446,7 +1451,9 @@ void Solver::garbageCollect()
     to.moveTo(ca);
 }
 
-void ClauseAllocator::reloc(CRef& cr, ClauseAllocator& to, CVC4::BVProofProxy* proxy)
+void ClauseAllocator::reloc(CRef& cr,
+                            ClauseAllocator& to,
+                            CVC4::TSatProof<Solver>* proof)
 {
   CRef old = cr;  // save the old reference
 
@@ -1455,8 +1462,9 @@ void ClauseAllocator::reloc(CRef& cr, ClauseAllocator& to, CVC4::BVProofProxy* p
   
   cr = to.alloc(c, c.learnt());
   c.relocate(cr);
-  if (proxy) {
-    proxy->updateCRef(old, cr); 
+  if (proof)
+  {
+    proof->updateCRef(old, cr);
   }
   
   // Copy extra data-fields: 
@@ -1464,6 +1472,19 @@ void ClauseAllocator::reloc(CRef& cr, ClauseAllocator& to, CVC4::BVProofProxy* p
   to[cr].mark(c.mark());
   if (to[cr].learnt())         to[cr].activity() = c.activity();
   else if (to[cr].has_extra()) to[cr].calcAbstraction();
+}
+
+void Solver::setNotify(Notify* toNotify) { d_notify = toNotify; }
+bool Solver::withinBudget(uint64_t amount) const
+{
+  AlwaysAssert(d_notify);
+  d_notify->spendResource(amount);
+  d_notify->safePoint(0);
+
+  return !asynch_interrupt &&
+         (conflict_budget < 0 || conflicts < (uint64_t)conflict_budget) &&
+         (propagation_budget < 0 ||
+          propagations < (uint64_t)propagation_budget);
 }
 
 } /* CVC4::BVMinisat namespace */

@@ -31,7 +31,8 @@ namespace CVC4 {
 namespace theory {
 namespace bv {
 
-enum RewriteRuleId {
+enum RewriteRuleId
+{
 
   /// core normalization rules
   EmptyRule,
@@ -144,6 +145,10 @@ enum RewriteRuleId {
   SltZero,
   ZeroUlt,
   MergeSignExtend,
+  SignExtendEqConst,
+  ZeroExtendEqConst,
+  SignExtendUltConst,
+  ZeroExtendUltConst,
 
   /// normalization rules
   ExtractBitwise,
@@ -171,11 +176,13 @@ enum RewriteRuleId {
   OrSimplify,
   XorSimplify,
   BitwiseSlicing,
+  NormalizeEqPlusNeg,
   // rules to simplify bitblasting
   BBPlusNeg,
   UltPlusOne,
   ConcatToMult,
-  IsPowerOfTwo
+  IsPowerOfTwo,
+  MultSltMult,
 };
 
 inline std::ostream& operator << (std::ostream& out, RewriteRuleId ruleId) {
@@ -303,6 +310,10 @@ inline std::ostream& operator << (std::ostream& out, RewriteRuleId ruleId) {
   case SltZero : out << "SltZero"; return out;
   case ZeroUlt : out << "ZeroUlt"; return out;
   case MergeSignExtend : out << "MergeSignExtend"; return out;
+  case SignExtendEqConst: out << "SignExtendEqConst"; return out;
+  case ZeroExtendEqConst: out << "ZeroExtendEqConst"; return out;
+  case SignExtendUltConst: out << "SignExtendUltConst"; return out;
+  case ZeroExtendUltConst: out << "ZeroExtendUltConst"; return out;
     
   case UleEliminate : out << "UleEliminate"; return out;
   case BitwiseSlicing : out << "BitwiseSlicing"; return out;
@@ -311,6 +322,8 @@ inline std::ostream& operator << (std::ostream& out, RewriteRuleId ruleId) {
   case UltPlusOne: out << "UltPlusOne"; return out;
   case ConcatToMult: out << "ConcatToMult"; return out;
   case IsPowerOfTwo: out << "IsPowerOfTwo"; return out;
+  case MultSltMult: out << "MultSltMult"; return out;
+  case NormalizeEqPlusNeg: out << "NormalizeEqPlusNeg"; return out;
   default:
     Unreachable();
   }
@@ -533,6 +546,12 @@ struct AllRewriteRules {
   RewriteRule<IsPowerOfTwo> rule121;
   RewriteRule<RedorEliminate> rule122;
   RewriteRule<RedandEliminate> rule123;
+  RewriteRule<SignExtendEqConst> rule124;
+  RewriteRule<ZeroExtendEqConst> rule125;
+  RewriteRule<SignExtendUltConst> rule126;
+  RewriteRule<ZeroExtendUltConst> rule127;
+  RewriteRule<MultSltMult> rule128;
+  RewriteRule<NormalizeEqPlusNeg> rule129;
 };
 
 template<> inline
