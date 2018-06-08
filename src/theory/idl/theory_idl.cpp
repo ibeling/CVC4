@@ -17,8 +17,8 @@
 
 #include "theory/idl/theory_idl.h"
 
-#include <queue>
 #include <new>
+#include <queue>
 #include <set>
 
 #include "options/idl_options.h"
@@ -30,8 +30,10 @@ namespace CVC4 {
 namespace theory {
 namespace idl {
 
-TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
-                     OutputChannel& out, Valuation valuation,
+TheoryIdl::TheoryIdl(context::Context* c,
+                     context::UserContext* u,
+                     OutputChannel& out,
+                     Valuation valuation,
                      const LogicInfo& logicInfo)
     : Theory(THEORY_ARITH, c, u, out, valuation, logicInfo),
       d_trail(c),
@@ -40,31 +42,39 @@ TheoryIdl::TheoryIdl(context::Context* c, context::UserContext* u,
       d_varList(c),
       d_allNodes(c),
       d_atomList(c),
-			d_firstAtom(c),
+      d_firstAtom(c),
       d_varMap(c),
       d_numVars(0),
       d_distances(c),
       d_indices(c),
-      d_context(c) {
-
+      d_context(c)
+{
 }
 
-void TheoryIdl::preRegisterTerm(TNode node) {
+void TheoryIdl::preRegisterTerm(TNode node)
+{
   Assert(node.getKind() != kind::NOT);
-  if (node.isVar()) {		
-    unsigned size = d_varMap.size();
-		d_varMap[node] = size;
-		d_varList.push_back(node);
+  if (node.isVar())
+  {
+    d_varMap[node] = d_varMap.size();
+    d_varList.push_back(node);
     return;
-  } else {
+  }
+  else
+  {
     IDLAssertion idl_assertion(node);
-    if (idl_assertion.ok()) {
+
+    if (idl_assertion.ok())
+    {
       Assert(node.getKind() != kind::NOT);
       AtomListEntry atomentry;
-      if (d_atomList.size() == 0) {
+      if (d_atomList.size() == 0)
+      {
         d_firstAtom.set(0);
         atomentry.prevSteps = 0;
-      } else {
+      }
+      else
+      {
         atomentry.prevSteps = 1;
         AtomListEntry lastEntry = d_atomList[d_atomList.size() - 1];
         lastEntry.nextSteps = 1;
@@ -73,7 +83,7 @@ void TheoryIdl::preRegisterTerm(TNode node) {
       atomentry.nextSteps = 0;
       atomentry.atom = node;
       atomentry.x = d_varMap[idl_assertion.getX()];
-      atomentry.y = d_varMap[idl_assertion.getY()];      
+      atomentry.y = d_varMap[idl_assertion.getY()];
       atomentry.c = idl_assertion.getC().getSignedInt();
       atomentry.pos = d_atomList.size();
       d_atomList.push_back(atomentry);
@@ -82,27 +92,32 @@ void TheoryIdl::preRegisterTerm(TNode node) {
   }
 }
 
-void TheoryIdl::presolve() {
-  // Debug("theory::idl") << "TheoryIdl::preSolve(): d_numVars = " << d_numVars
-  // << std::endl;
-  d_numVars = d_varMap.size();
-  for (unsigned i = 0 ; i < d_numVars; ++i) {
-    for (unsigned j = 0; j < d_numVars; ++j) {
+void TheoryIdl::presolve()
+{
+  d_numVars = d_varMap.size() + 1;
+  for (unsigned i = 0; i < d_numVars; ++i)
+  {
+    for (unsigned j = 0; j < d_numVars; ++j)
+    {
       unsigned ij = pairToIndex(i, j);
-      if (i == j) {
-	d_distances.insertAtContextLevelZero(ij, 0);
+      if (i == j)
+      {
+        d_distances.insertAtContextLevelZero(ij, 0);
       }
     }
   }
 }
 
-void TheoryIdl::postsolve() {
+void TheoryIdl::postsolve()
+{
   // Debug("theory::idl") << "TheoryIdl::postSolve()" << std::endl;
 }
 
-Node TheoryIdl::ppRewrite(TNode atom) {
+Node TheoryIdl::ppRewrite(TNode atom)
+{
   Assert(atom.getKind() != kind::NOT);
-  if (atom.getKind() == kind::EQUAL) {
+  if (atom.getKind() == kind::EQUAL)
+  {
     Node leq = NodeBuilder<2>(kind::LEQ) << atom[0] << atom[1];
     Node geq = NodeBuilder<2>(kind::GEQ) << atom[0] << atom[1];
     Node rewritten = Rewriter::rewrite(leq.andNode(geq));
@@ -111,29 +126,34 @@ Node TheoryIdl::ppRewrite(TNode atom) {
   return atom;
 }
 
-void TheoryIdl::propagate(Effort level) {
+void TheoryIdl::propagate(Effort level)
+{
   //	  cout << "Printing assertion list " << endl;
   // cout << "The first index is  " << d_firstAtom.get() << endl;
 
   bool value;
-    unsigned firstIndex = d_firstAtom.get();
-    if (firstIndex >= d_atomList.size()) {
-      Assert(d_atomList.empty());
-      Assert(firstIndex == 0);
-      return;
-    }
+  unsigned firstIndex = d_firstAtom.get();
+  if (firstIndex >= d_atomList.size())
+  {
+    Assert(d_atomList.empty());
+    Assert(firstIndex == 0);
+    return;
+  }
   AtomListEntry entry = d_atomList.get(firstIndex);
-  while (entry.nextSteps != 0) {
+  while (entry.nextSteps != 0)
+  {
     TNode node = entry.atom;
     // bool alreadyAssigned = d_valuation.hasSatValue(node, value);
     unsigned xy = pairToIndex(entry.x, entry.y);
-    if (d_distances.contains(xy) && (d_distances[xy].get() <= entry.c)) {
+    if (d_distances.contains(xy) && (d_distances[xy].get() <= entry.c))
+    {
       d_indices1[node] = d_indices[xy].get();
       d_out->propagate(node);
     }
 
     unsigned yx = pairToIndex(entry.y, entry.x);
-    if (d_distances.contains(yx) && (d_distances[yx].get() < -entry.c)) {
+    if (d_distances.contains(yx) && (d_distances[yx].get() < -entry.c))
+    {
       TNode nn = NodeManager::currentNM()->mkNode(kind::NOT, node);
       d_indices1[nn] = d_indices[yx].get();
       d_out->propagate(nn);
@@ -144,19 +164,25 @@ void TheoryIdl::propagate(Effort level) {
   }
 }
 
-void TheoryIdl::getPath(unsigned idx, std::vector<TNode>& reasonslist) {
+void TheoryIdl::getPath(unsigned idx, std::vector<TNode>& reasonslist)
+{
   const TrailEntry& entry = d_trail[idx];
 
-  if (entry.reasons.size() == 0) {
+  if (entry.reasons.size() == 0)
+  {
     reasonslist.push_back(entry.original);
-  } else {
-    for (unsigned i = 0; i < entry.reasons.size(); ++i) {
+  }
+  else
+  {
+    for (unsigned i = 0; i < entry.reasons.size(); ++i)
+    {
       getPath(entry.reasons[i], reasonslist);
     }
   }
 }
 
-Node TheoryIdl::explain(TNode n) {
+Node TheoryIdl::explain(TNode n)
+{
   Assert(d_indices1.contains(n));
   unsigned idx = d_indices1[n];
 
@@ -164,29 +190,36 @@ Node TheoryIdl::explain(TNode n) {
   getPath(idx, reasonslist);
 
   Node explanation;
-  if (reasonslist.size() > 1) {
+  if (reasonslist.size() > 1)
+  {
     explanation = NodeManager::currentNM()->mkNode(kind::AND, reasonslist);
-  } else {
+  }
+  else
+  {
     explanation = reasonslist[0];
   }
 
   return explanation;
 }
 
-void TheoryIdl::check(Effort level) {
-  if (done() && !fullEffort(level)) {
+void TheoryIdl::check(Effort level)
+{
+  if (done() && !fullEffort(level))
+  {
     return;
   }
 
   TimerStat::CodeTimer checkTimer(d_checkTime);
 
-  while (!done()) {
+  while (!done())
+  {
     // Get the next assertion
     Assertion assertion = get();
     TNode assertiontnode = assertion.assertion;
     //	  cout << "Asserted " << assertiontnode << endl;
     unsigned index;
-    if (assertiontnode.getKind() == kind::NOT) {
+    if (assertiontnode.getKind() == kind::NOT)
+    {
       //	      cout << "assert " << assertiontnode << endl;
 
       assertiontnode = assertion.assertion[0];
@@ -206,14 +239,14 @@ void TheoryIdl::check(Effort level) {
 
     // delete from list
 
-    if (entry.prevSteps != 0) {
-
+    if (entry.prevSteps != 0)
+    {
       AtomListEntry prevEntry = d_atomList.get(entry.pos - entry.prevSteps);
       prevEntry.nextSteps = prevEntry.nextSteps + entry.nextSteps;
       d_atomList.set(prevEntry.pos, prevEntry);
     }
-    if (entry.nextSteps != 0) {
-
+    if (entry.nextSteps != 0)
+    {
       AtomListEntry nextEntry = d_atomList.get(entry.pos + entry.nextSteps);
       nextEntry.prevSteps = nextEntry.prevSteps + entry.prevSteps;
       d_atomList.set(nextEntry.pos, nextEntry);
@@ -223,10 +256,10 @@ void TheoryIdl::check(Effort level) {
     // firstIndex has to be updated. (if also last atom, set to end)
     // besides this, next entry has to have prev set to zero.
     unsigned firstIndex = d_firstAtom.get();
-    if (index == firstIndex) {
-      
-      if (entry.nextSteps != 0) {
-
+    if (index == firstIndex)
+    {
+      if (entry.nextSteps != 0)
+      {
         AtomListEntry afterFirst = d_atomList.get(entry.nextSteps + index);
         afterFirst.prevSteps = 0;
         d_atomList.set(entry.nextSteps + index, afterFirst);
@@ -241,12 +274,14 @@ void TheoryIdl::check(Effort level) {
     // cout << "doing assertion " << assertion << endl;
     bool ok = processAssertion(idl_assertion, assertion);
     Debug("theory::idl") << "assertion " << assertion << endl;
-    if (!ok) {
+    if (!ok)
+    {
       // cout << "conflict! " << assertion << endl;
       // d_propagationQueue.clear();
       std::vector<TNode> reasonslist;
 
-      unsigned yx = pairToIndex(d_varMap[idl_assertion.getY()], d_varMap[idl_assertion.getX()]);
+      unsigned yx = pairToIndex(d_varMap[idl_assertion.getY()],
+                                d_varMap[idl_assertion.getX()]);
 
       getPath(d_indices[yx].get(), reasonslist);
       // cout << "CONFLICT was " << valgp << " and size = " <<
@@ -261,24 +296,27 @@ void TheoryIdl::check(Effort level) {
 }
 
 bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
-                                 const TNode& original) {
+                                 const TNode& original)
+{
   Assert(assertion.ok());
 
   int c = assertion.getC().getSignedInt();
 
-  unsigned x = d_varMap[assertion.getX()];
-  unsigned y = d_varMap[assertion.getY()];
+  unsigned x = assertion.getX().isNull() ? (d_numVars - 1) : d_varMap[assertion.getX()];
+  unsigned y = assertion.getY().isNull() ? (d_numVars - 1) : d_varMap[assertion.getY()];
 
   unsigned yx = pairToIndex(y, x);
 
   // Check whether we introduce a negative cycle.
-  if (d_distances.contains(yx) && (d_distances[yx].get() + c) < 0) {
+  if (d_distances.contains(yx) && (d_distances[yx].get() + c) < 0)
+  {
     return false;
   }
 
   unsigned xy = pairToIndex(x, y);
   // Check whether assertion is redundant
-  if (d_distances.contains(xy) && (d_distances[xy].get() <= c)) {
+  if (d_distances.contains(xy) && (d_distances[xy].get() <= c))
+  {
     //	  cout << "redundant!" << endl;
     return true;
   }
@@ -292,25 +330,31 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
   // Find shortest paths incrementally
   std::vector<unsigned> valid_vars;
   valid_vars.reserve(d_numVars);
-  for (unsigned z = 0; z < d_numVars; ++z) {
+  for (unsigned z = 0; z < d_numVars; ++z)
+  {
     unsigned yz = pairToIndex(y, z);
     unsigned xz = pairToIndex(x, z);  // TODO: eliminate double lookups
-    if (d_distances.contains(yz) &&
-        ((!d_distances.contains(xz)) ||
-         ((c + d_distances[yz].get()) < d_distances[xz].get())) ) {
+    if (d_distances.contains(yz)
+        && ((!d_distances.contains(xz))
+            || ((c + d_distances[yz].get()) < d_distances[xz].get())))
+    {
       valid_vars.push_back(z);
     }
   }
-  unsigned vvsize = valid_vars.size();  
-  for (unsigned z = 0; z < d_numVars; ++z) {
+  unsigned vvsize = valid_vars.size();
+  for (unsigned z = 0; z < d_numVars; ++z)
+  {
     unsigned zx = pairToIndex(z, x);
     unsigned zy = pairToIndex(z, y);
-    if (d_distances.contains(zx) &&
-        ((!d_distances.contains(zy)) ||
-         ((c + d_distances[zx].get()) < d_distances[zy].get()))) {
-      for (unsigned i = 0; i < vvsize; ++i) {
+    if (d_distances.contains(zx)
+        && ((!d_distances.contains(zy))
+            || ((c + d_distances[zx].get()) < d_distances[zy].get())))
+    {
+      for (unsigned i = 0; i < vvsize; ++i)
+      {
         unsigned v = valid_vars[i];
-        if (v == z) {
+        if (v == z)
+        {
           continue;
         }
         unsigned yv = pairToIndex(y, v);
@@ -319,21 +363,27 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
         // Three reasons: this assertion, the reason for z ~ x, and the reason
         // for y ~ v.
         int dist = c + d_distances[zx].get() + d_distances[yv].get();
-        if ((!d_distances.contains(zv)) || (dist < d_distances[zv].get())) {
+        if ((!d_distances.contains(zv)) || (dist < d_distances[zv].get()))
+        {
           d_distances[zv].set(dist);
 
           TrailEntry zvEntry;
-          if (z != x) {
+          if (z != x)
+          {
             zvEntry.reasons.push_back(d_indices[pairToIndex(z, x)].get());
           }
           zvEntry.reasons.push_back(xyIndex);
-          if (y != v) {
+          if (y != v)
+          {
             zvEntry.reasons.push_back(d_indices[yv].get());
           }
-          if (z != x || y != v) {
+          if (z != x || y != v)
+          {
             d_trail.push_back(zvEntry);
             d_indices[zv].set(d_trail.size() - 1);
-          } else {
+          }
+          else
+          {
             d_indices[zv].set(xyIndex);
           }
 
@@ -364,6 +414,6 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
   return true;
 }
 
-} /* namepsace CVC4::theory::idl */
-} /* namepsace CVC4::theory */
-} /* namepsace CVC4 */
+}  // namespace idl
+}  // namespace theory
+}  // namespace CVC4
