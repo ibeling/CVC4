@@ -47,7 +47,8 @@ TheoryIdl::TheoryIdl(context::Context* c,
       d_numVars(0),
       d_distances(c),
       d_indices(c),
-      d_context(c)
+      d_context(c),
+      d_needFakeVariable(false)
 {
 }
 
@@ -63,10 +64,10 @@ void TheoryIdl::preRegisterTerm(TNode node)
   else
   {
     IDLAssertion idl_assertion(node);
-
     if (idl_assertion.ok())
     {
       Assert(node.getKind() != kind::NOT);
+	  if (idl_assertion.getX().isNull() || idl_assertion.getY().isNull()) d_needFakeVariable = true;
       AtomListEntry atomentry;
       if (d_atomList.size() == 0)
       {
@@ -94,7 +95,10 @@ void TheoryIdl::preRegisterTerm(TNode node)
 
 void TheoryIdl::presolve()
 {
-  d_numVars = d_varMap.size() + 1;
+  //if (d_needFakeVariable)
+	 // cout << "need a fake variable! " << endl;
+  
+  d_numVars = d_needFakeVariable ? (d_varMap.size() + 1) : d_varMap.size();
   for (unsigned i = 0; i < d_numVars; ++i)
   {
     for (unsigned j = 0; j < d_numVars; ++j)
@@ -302,6 +306,10 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
 
   int c = assertion.getC().getSignedInt();
 
+  if (assertion.getX().isNull() || assertion.getY().isNull())
+  {
+    Assert(d_needFakeVariable);
+  }
   unsigned x = assertion.getX().isNull() ? (d_numVars - 1) : d_varMap[assertion.getX()];
   unsigned y = assertion.getY().isNull() ? (d_numVars - 1) : d_varMap[assertion.getY()];
 

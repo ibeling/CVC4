@@ -54,6 +54,8 @@ public:
  * Handles integer difference logic (IDL) constraints.
  */
 class TheoryIdl : public Theory {
+
+
   /** Process a new assertion */
   bool processAssertion(const IDLAssertion& assertion, const TNode& original);
 
@@ -105,6 +107,7 @@ class TheoryIdl : public Theory {
   std::unordered_map<TNode, unsigned, TNodeHashFunction> d_atomToIndexMap;
 
   unsigned d_numVars;
+  bool d_needFakeVariable;
 
   context::Context* d_context;
 
