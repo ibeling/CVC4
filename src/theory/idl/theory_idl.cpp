@@ -85,7 +85,7 @@ void TheoryIdl::preRegisterTerm(TNode node)
       atomentry.atom = node;
       atomentry.x = d_varMap[idl_assertion.getX()];
       atomentry.y = d_varMap[idl_assertion.getY()];
-      atomentry.c = idl_assertion.getC().getSignedInt();
+      atomentry.c = idl_assertion.getC();
       atomentry.pos = d_atomList.size();
       d_atomList.push_back(atomentry);
       d_atomToIndexMap[node] = d_atomList.size() - 1;
@@ -304,7 +304,7 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
 {
   Assert(assertion.ok());
 
-  int c = assertion.getC().getSignedInt();
+  Integer c = assertion.getC();
 
   if (assertion.getX().isNull() || assertion.getY().isNull())
   {
@@ -370,7 +370,7 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
         // Path z ~ x -> y ~ v
         // Three reasons: this assertion, the reason for z ~ x, and the reason
         // for y ~ v.
-        int dist = c + d_distances[zx].get() + d_distances[yv].get();
+        Integer dist = c + d_distances[zx].get() + d_distances[yv].get();
         if ((!d_distances.contains(zv)) || (dist < d_distances[zv].get()))
         {
           d_distances[zv].set(dist);
