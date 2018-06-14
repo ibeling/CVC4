@@ -82,10 +82,11 @@ void TheoryIdl::preRegisterTerm(TNode node)
         d_atomList.set(lastEntry.pos, lastEntry);
       }
       atomentry.nextSteps = 0;
-      atomentry.atom = node;
-      atomentry.x = d_varMap[idl_assertion.getX()];
-      atomentry.y = d_varMap[idl_assertion.getY()];
-      atomentry.c = idl_assertion.getC();
+      atomentry.idl_assertion = idl_assertion;
+      // atomentry.atom = node;
+      // atomentry.x = d_varMap[idl_assertion.getX()];
+      // atomentry.y = d_varMap[idl_assertion.getY()];
+      // atomentry.c = idl_assertion.getC();
       atomentry.pos = d_atomList.size();
       d_atomList.push_back(atomentry);
       d_atomToIndexMap[node] = d_atomList.size() - 1;
@@ -146,17 +147,21 @@ void TheoryIdl::propagate(Effort level)
   AtomListEntry entry = d_atomList.get(firstIndex);
   while (entry.nextSteps != 0)
   {
-    TNode node = entry.atom;
+    const IDLAssertion &idl_assertion = entry.idl_assertion;
+    TNode node = idl_assertion.getTNode();
     // bool alreadyAssigned = d_valuation.hasSatValue(node, value);
-    unsigned xy = pairToIndex(entry.x, entry.y);
-    if (d_distances.contains(xy) && (d_distances[xy].get() <= entry.c))
+    unsigned x = getIndexFromVarTNode(idl_assertion.getX());
+    unsigned y = getIndexFromVarTNode(idl_assertion.getY());
+    Integer c = idl_assertion.getC();
+    unsigned xy = pairToIndex(x, y);
+    if (d_distances.contains(xy) && (d_distances[xy].get() <= c))
     {
       d_indices1[node] = d_indices[xy].get();
       d_out->propagate(node);
     }
 
-    unsigned yx = pairToIndex(entry.y, entry.x);
-    if (d_distances.contains(yx) && (d_distances[yx].get() < -entry.c))
+    unsigned yx = pairToIndex(y, x);
+    if (d_distances.contains(yx) && (d_distances[yx].get() < -c))
     {
       TNode nn = NodeManager::currentNM()->mkNode(kind::NOT, node);
       d_indices1[nn] = d_indices[yx].get();
@@ -284,8 +289,8 @@ void TheoryIdl::check(Effort level)
       // d_propagationQueue.clear();
       std::vector<TNode> reasonslist;
 
-      unsigned yx = pairToIndex(d_varMap[idl_assertion.getY()],
-                                d_varMap[idl_assertion.getX()]);
+      unsigned yx = pairToIndex(getIndexFromVarTNode(idl_assertion.getY()),
+                                getIndexFromVarTNode(idl_assertion.getX()));
 
       getPath(d_indices[yx].get(), reasonslist);
       // cout << "CONFLICT was " << valgp << " and size = " <<
@@ -310,8 +315,8 @@ bool TheoryIdl::processAssertion(const IDLAssertion& assertion,
   {
     Assert(d_needFakeVariable);
   }
-  unsigned x = assertion.getX().isNull() ? (d_numVars - 1) : d_varMap[assertion.getX()];
-  unsigned y = assertion.getY().isNull() ? (d_numVars - 1) : d_varMap[assertion.getY()];
+  unsigned x = getIndexFromVarTNode(assertion.getX());
+  unsigned y = getIndexFromVarTNode(assertion.getY());
 
   unsigned yx = pairToIndex(y, x);
 

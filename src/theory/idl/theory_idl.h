@@ -34,10 +34,11 @@ class AtomListEntry {
   unsigned nextSteps;
   unsigned prevSteps;
   unsigned pos;
-  TNode atom;
-  unsigned x;
-  unsigned y;
-  Integer c;
+  IDLAssertion idl_assertion;
+  /* TNode atom; */
+  /* unsigned x; */
+  /* unsigned y; */
+  /* Integer c; */
 };
 
 class TrailEntry {
@@ -114,6 +115,11 @@ class TheoryIdl : public Theory {
 inline unsigned pairToIndex(unsigned i, unsigned j)
 {
   return i * d_numVars + j;
+}
+
+inline unsigned getIndexFromVarTNode(const TNode &idl_assertion_x)
+{
+  return idl_assertion_x.isNull() ? (d_numVars - 1) : d_varMap[idl_assertion_x];
 }
 
 public:
